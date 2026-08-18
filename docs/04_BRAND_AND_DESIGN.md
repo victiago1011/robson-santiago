@@ -77,16 +77,27 @@ Evitar:
 
 ## Responsividade
 
-Mobile não é apenas desktop comprimido.
+Responsividade faz parte do design desde a primeira implementação. Não deixar a adaptação mobile para o final do projeto.
 
-Cada seção deve ser reorganizada para telas menores preservando:
+Referências mínimas de projeto e validação:
+
+- **Mobile:** aproximadamente 390px
+- **Tablet:** aproximadamente 768px
+- **Desktop:** aproximadamente 1440px
+
+Mobile não é apenas desktop comprimido. Cada seção deve ser reorganizada quando necessário, preservando:
 
 - hierarquia;
 - legibilidade;
 - impacto fotográfico;
 - espaçamento;
 - facilidade de toque;
-- ordem narrativa.
+- ordem narrativa;
+- equilíbrio entre texto e imagem.
+
+Em telas menores, é permitido e esperado alterar organização de colunas, ordem visual, tamanho de imagens, escala tipográfica, espaçamentos e comportamento do menu, desde que a identidade aprovada seja preservada.
+
+Nenhuma seção visual é considerada concluída sem validação em desktop e mobile. Tablet também deve ser verificado quando a composição tiver grids, colunas ou navegação suscetíveis a quebra.
 
 ## Referência Google Stitch
 

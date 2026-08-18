@@ -25,6 +25,32 @@ Usar as versões já presentes no `package.json` como fonte técnica atual.
 - acessibilidade e HTML semântico;
 - performance e SEO compatíveis com um site editorial.
 
+
+## Responsividade obrigatória
+
+Toda implementação visual deve nascer responsiva. Responsividade não é uma etapa posterior nem uma correção de acabamento.
+
+Referências mínimas de validação:
+
+- Mobile: aproximadamente 390px
+- Tablet: aproximadamente 768px
+- Desktop: aproximadamente 1440px
+
+Cada seção deve ser pensada para esses contextos desde sua primeira implementação. O mesmo código deve se adaptar por breakpoints; não criar versões duplicadas de página sem necessidade.
+
+Uma seção NÃO é considerada concluída se funcionar apenas em desktop.
+
+Antes de considerar um escopo visual finalizado, validar pelo menos:
+
+- hierarquia e leitura em mobile;
+- ausência de overflow horizontal;
+- imagens proporcionais e responsivas;
+- espaçamentos adequados;
+- textos sem cortes;
+- CTAs com área de toque confortável;
+- navegação funcional em telas menores;
+- reorganização correta de colunas, grids e ordem narrativa.
+
 ## Estrutura sugerida
 
 A estrutura pode evoluir conforme necessidade aprovada. Direção inicial:

@@ -105,6 +105,10 @@ Preferir:
 - acessibilidade;
 - responsividade real.
 
+Toda implementação visual deve ser responsiva desde o primeiro commit do escopo. Não implementar primeiro para desktop com a intenção de “corrigir mobile depois”.
+
+Referências mínimas de validação: aproximadamente 390px, 768px e 1440px. Uma seção visual não está concluída se apresentar quebra, overflow, perda de hierarquia ou navegação inadequada em telas menores.
+
 Evitar overengineering.
 
 ## 8. Dependências

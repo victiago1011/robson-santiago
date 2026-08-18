@@ -37,4 +37,4 @@ Faça somente o que foi aprovado. Uma correção não autoriza refatorações pa
 
 ## Estado inicial
 
-O projeto é o site pessoal oficial de Robson Santiago e está sendo construído em Next.js + TypeScript + Tailwind CSS. A Home será desenvolvida progressivamente a partir de referências visuais aprovadas.
+O projeto é o site pessoal oficial de Robson Santiago e está sendo construído em Next.js + TypeScript + Tailwind CSS. A Home será desenvolvida progressivamente a partir de referências visuais aprovadas. Toda seção visual deve nascer responsiva e ser validada em mobile, tablet e desktop antes de ser considerada concluída.

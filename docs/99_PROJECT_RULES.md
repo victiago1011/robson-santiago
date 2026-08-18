@@ -35,7 +35,10 @@ Nunca inventar dados sobre Robson Santiago, livros, podcast, projetos, avaliaç�
 - Robson Santiago é a marca central.
 - Linguagem editorial, elegante e minimalista.
 - Google Stitch é referência visual, não autoridade sobre arquitetura/código.
-- Responsividade deve ser real.
+- Responsividade deve ser real e implementada desde o início de cada seção.
+- Validar como referência aproximadamente 390px (mobile), 768px (tablet) e 1440px (desktop).
+- Uma seção visual não está concluída se funcionar apenas em desktop.
+- Mobile pode reorganizar layout, ordem, tamanhos e espaçamentos; não deve ser apenas o desktop comprimido.
 - Não transformar o site em aparência de startup, dashboard ou template genérico.
 
 ## Engenharia

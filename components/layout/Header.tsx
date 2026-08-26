@@ -4,12 +4,12 @@ import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 
 const navItems = [
-  "Sobre",
-  "Livro",
-  "VEZ",
-  "Reflexões",
-  "Projetos",
-  "Contato",
+  { label: "Sobre" },
+  { label: "Livro", href: "/livro" },
+  { label: "VEZ" },
+  { label: "Reflexões" },
+  { label: "Projetos" },
+  { label: "Contato" },
 ] as const;
 
 const desktopQuery = "(min-width: 1024px)";
@@ -17,12 +17,27 @@ const desktopQuery = "(min-width: 1024px)";
 const menuButtonClassName =
   "inline-flex min-h-11 min-w-[4.5rem] cursor-pointer items-center justify-end border-0 bg-transparent p-0 font-sans text-[0.7rem] font-medium tracking-[0.16em] text-ink uppercase appearance-none focus-visible:outline-none focus-visible:underline";
 
-function NavItems({ className }: { className: string }) {
+const navLinkClassName =
+  "underline-offset-4 hover:underline focus-visible:outline-none focus-visible:underline";
+
+function NavItems({
+  className,
+  onNavigate,
+}: {
+  className: string;
+  onNavigate?: () => void;
+}) {
   return (
     <ul className={className}>
       {navItems.map((item) => (
-        <li key={item}>
-          <span className="cursor-default">{item}</span>
+        <li key={item.label}>
+          {"href" in item ? (
+            <Link href={item.href} className={navLinkClassName} onClick={onNavigate}>
+              {item.label}
+            </Link>
+          ) : (
+            <span className="cursor-default">{item.label}</span>
+          )}
         </li>
       ))}
     </ul>
@@ -102,16 +117,16 @@ export default function Header() {
           Robson Santiago
         </Link>
 
-        <div className="hidden lg:block" aria-hidden="true">
+        <nav className="hidden lg:block" aria-label="Principal">
           <NavItems className="flex items-center gap-8 font-sans text-[0.7rem] tracking-[0.16em] text-ink uppercase" />
-        </div>
+        </nav>
 
         <button
           type="button"
           className={`lg:hidden ${menuButtonClassName}`}
           aria-expanded={open}
           aria-controls={menuId}
-          aria-label="Abrir menu visual. As demais páginas ainda não estão disponíveis."
+          aria-label="Abrir menu"
           onClick={() => setOpen(true)}
         >
           Menu
@@ -146,12 +161,15 @@ export default function Header() {
             </button>
           </div>
 
-          <div
+          <nav
             className="flex flex-1 flex-col justify-center px-6 py-16 md:px-10"
-            aria-hidden="true"
+            aria-label="Principal"
           >
-            <NavItems className="flex flex-col gap-8 font-sans text-sm tracking-[0.22em] text-ink uppercase md:gap-10 md:text-base" />
-          </div>
+            <NavItems
+              className="flex flex-col gap-8 font-sans text-sm tracking-[0.22em] text-ink uppercase md:gap-10 md:text-base"
+              onNavigate={() => setOpen(false)}
+            />
+          </nav>
         </div>
       ) : null}
     </header>

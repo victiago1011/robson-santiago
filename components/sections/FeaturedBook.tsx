@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 
 export default function FeaturedBook() {
   return (
@@ -32,6 +33,12 @@ export default function FeaturedBook() {
             Uma narrativa sobre retorno, escolhas e humanidade em um mundo à
             beira do colapso — onde o valor do momento se torna central.
           </p>
+          <Link
+            href="/livro"
+            className="mt-8 inline-flex min-h-11 items-center font-sans text-sm text-ink underline-offset-4 hover:underline focus-visible:outline-none focus-visible:underline md:mt-10 md:text-base"
+          >
+            Conhecer o livro →
+          </Link>
         </div>
       </div>
     </section>

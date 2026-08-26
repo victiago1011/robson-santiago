@@ -1,6 +1,6 @@
 export default function AboutPreview() {
   return (
-    <section aria-labelledby="sobre-heading" className="bg-paper-strong">
+    <section id="sobre" aria-labelledby="sobre-heading" className="bg-paper-strong">
       <div className="mx-auto max-w-[90rem] px-6 py-20 md:px-8 md:py-28 lg:px-12 lg:py-36 xl:px-16">
         <h2
           id="sobre-heading"

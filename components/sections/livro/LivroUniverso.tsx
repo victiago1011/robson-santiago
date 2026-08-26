@@ -1,7 +1,7 @@
 const ETERNOS = [
   { nome: "Vitam", essencia: "Vida" },
   { nome: "Ananda", essencia: "Felicidade" },
-  { nome: "Gaudium", essencia: "Alegria / Esperança" },
+    { nome: "Gaudium", essencia: "Esperança" },
   { nome: "Mettã", essencia: "Bondade" },
   { nome: "Humilitatem", essencia: "Humildade" },
   { nome: "Anasuya", essencia: "Caridade" },
@@ -20,12 +20,8 @@ export default function LivroUniverso() {
             id="universo-heading"
             className="mt-5 font-display text-[1.75rem] leading-[1.12] tracking-tight text-ink md:text-[2.25rem] lg:text-[2.6rem]"
           >
-            E se fosse possível voltar —{" "}
-            <span className="lg:mt-1 lg:block">não para mudar o passado, </span>
-            <span className="lg:mt-1 lg:block">
-              mas para impedir que os mesmos erros{" "}
-            </span>
-            <span className="lg:mt-1 lg:block">acontecessem outra vez?</span>
+            E se fosse possível voltar ao passado, não para mudá-lo, mas para
+            impedir que os mesmos erros acontecessem outra vez?
           </h2>
         </div>
 

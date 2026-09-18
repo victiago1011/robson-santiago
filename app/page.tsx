@@ -1,4 +1,5 @@
 import AboutPreview from "@/components/sections/AboutPreview";
+import ConfrariaFinancas from "@/components/sections/ConfrariaFinancas";
 import CorrenteDoBem from "@/components/sections/CorrenteDoBem";
 import FeaturedBook from "@/components/sections/FeaturedBook";
 import FinancePreview from "@/components/sections/FinancePreview";
@@ -13,8 +14,9 @@ export default function Home() {
       <AboutPreview />
       <FinancePreview />
       <VezPodcast />
-      <FeaturedBook />
       <CorrenteDoBem />
+      <FeaturedBook />
+      <ConfrariaFinancas />
       <LivroParafraseado />
     </main>
   );

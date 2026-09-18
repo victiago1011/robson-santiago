@@ -1,7 +1,15 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type TransitionEvent,
+} from "react";
 
 const INSTAGRAM_URL = "https://www.instagram.com/livroparafraseado/";
 
@@ -33,83 +41,181 @@ const PUBLICATIONS = [
 ] as const;
 
 const INITIAL_INDEX = 1;
+const TRANSITION_MS = 520;
+const ITEM_COUNT = PUBLICATIONS.length;
+
+const TRACK_SLIDES = [
+  { ...PUBLICATIONS[ITEM_COUNT - 1], key: "clone-last" },
+  ...PUBLICATIONS.map((publication, index) => ({
+    ...publication,
+    key: `item-${index}`,
+  })),
+  { ...PUBLICATIONS[0], key: "clone-first" },
+];
 
 const controlClassName =
-  "inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center border-0 bg-transparent p-0 font-sans text-xl leading-none text-ink appearance-none focus-visible:outline-none focus-visible:underline disabled:cursor-not-allowed disabled:opacity-25";
+  "inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center border-0 bg-transparent p-0 font-sans text-xl leading-none text-ink appearance-none focus-visible:outline-none focus-visible:underline";
 
 function prefersReducedMotion() {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
+function wrapIndex(index: number) {
+  return ((index % ITEM_COUNT) + ITEM_COUNT) % ITEM_COUNT;
+}
+
+function logicalIndexFromTrack(trackIndex: number) {
+  if (trackIndex === 0) {
+    return ITEM_COUNT - 1;
+  }
+
+  if (trackIndex === ITEM_COUNT + 1) {
+    return 0;
+  }
+
+  return trackIndex - 1;
+}
+
 export default function LivroParafraseado() {
-  const scrollerRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const activeIndexRef = useRef(INITIAL_INDEX);
+  const animatingRef = useRef(false);
+  const pendingJumpRef = useRef<number | null>(null);
+
   const [activeIndex, setActiveIndex] = useState(INITIAL_INDEX);
+  const [trackIndex, setTrackIndex] = useState(INITIAL_INDEX + 1);
+  const [withTransition, setWithTransition] = useState(false);
+  const [metrics, setMetrics] = useState({ slide: 0, gap: 0, viewport: 0 });
 
-  const goTo = useCallback((index: number, behavior?: ScrollBehavior) => {
-    const nextIndex = Math.max(0, Math.min(PUBLICATIONS.length - 1, index));
-    const scroller = scrollerRef.current;
-    const slide = scroller?.querySelector<HTMLElement>(
-      `[data-slide="${nextIndex}"]`,
-    );
+  activeIndexRef.current = activeIndex;
 
-    if (!scroller || !slide) {
+  const measure = useCallback(() => {
+    const viewport = viewportRef.current;
+    const track = trackRef.current;
+    const slide = track?.querySelector<HTMLElement>("[data-slide]");
+
+    if (!viewport || !track || !slide) {
       return;
     }
 
-    const left = slide.offsetLeft - (scroller.clientWidth - slide.offsetWidth) / 2;
-    scroller.scrollTo({
-      left,
-      behavior: behavior ?? (prefersReducedMotion() ? "auto" : "smooth"),
+    const gap = Number.parseFloat(getComputedStyle(track).columnGap || getComputedStyle(track).gap) || 0;
+
+    setMetrics({
+      slide: slide.getBoundingClientRect().width,
+      gap,
+      viewport: viewport.clientWidth,
     });
   }, []);
 
   useLayoutEffect(() => {
-    goTo(INITIAL_INDEX, "auto");
-  }, [goTo]);
+    measure();
+  }, [measure]);
+
+  useLayoutEffect(() => {
+    if (!withTransition) {
+      animatingRef.current = false;
+    }
+  }, [trackIndex, withTransition]);
 
   useEffect(() => {
-    const scroller = scrollerRef.current;
-    if (!scroller) {
+    const viewport = viewportRef.current;
+
+    if (!viewport) {
       return;
     }
 
-    let frame = 0;
+    const observer = new ResizeObserver(() => {
+      measure();
+    });
 
-    const updateActive = () => {
-      const slides = [...scroller.querySelectorAll<HTMLElement>("[data-slide]")];
-      const center = scroller.scrollLeft + scroller.clientWidth / 2;
-      let closest = 0;
-      let closestDistance = Infinity;
-
-      slides.forEach((slide, index) => {
-        const slideCenter = slide.offsetLeft + slide.offsetWidth / 2;
-        const distance = Math.abs(center - slideCenter);
-        if (distance < closestDistance) {
-          closestDistance = distance;
-          closest = index;
-        }
-      });
-
-      setActiveIndex(closest);
-    };
-
-    const onScroll = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(updateActive);
-    };
-
-    updateActive();
-    scroller.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll);
+    observer.observe(viewport);
+    window.addEventListener("resize", measure);
 
     return () => {
-      cancelAnimationFrame(frame);
-      scroller.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onScroll);
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
     };
+  }, [measure]);
+
+  const goTo = useCallback((index: number) => {
+    if (animatingRef.current) {
+      return;
+    }
+
+    const from = activeIndexRef.current;
+    const to = wrapIndex(index);
+
+    if (to === from) {
+      return;
+    }
+
+    let nextTrack = to + 1;
+
+    if (from === ITEM_COUNT - 1 && to === 0) {
+      nextTrack = ITEM_COUNT + 1;
+    } else if (from === 0 && to === ITEM_COUNT - 1) {
+      nextTrack = 0;
+    }
+
+    setActiveIndex(to);
+    activeIndexRef.current = to;
+
+    if (prefersReducedMotion()) {
+      pendingJumpRef.current = null;
+      setWithTransition(false);
+      setTrackIndex(to + 1);
+      return;
+    }
+
+    animatingRef.current = true;
+    pendingJumpRef.current = nextTrack === to + 1 ? null : to + 1;
+    setWithTransition(true);
+    setTrackIndex(nextTrack);
   }, []);
 
-  const counter = `${String(activeIndex + 1).padStart(2, "0")} / ${String(PUBLICATIONS.length).padStart(2, "0")}`;
+  const goNext = useCallback(() => {
+    goTo(activeIndexRef.current + 1);
+  }, [goTo]);
+
+  const goPrevious = useCallback(() => {
+    goTo(activeIndexRef.current - 1);
+  }, [goTo]);
+
+  const handleTransitionEnd = (event: TransitionEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget || event.propertyName !== "transform") {
+      return;
+    }
+
+    const jumpTo = pendingJumpRef.current;
+
+    if (jumpTo !== null) {
+      pendingJumpRef.current = null;
+      setWithTransition(false);
+      setTrackIndex(jumpTo);
+      return;
+    }
+
+    animatingRef.current = false;
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      goNext();
+    }
+
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      goPrevious();
+    }
+  };
+
+  const translateX =
+    metrics.viewport === 0 || metrics.slide === 0
+      ? 0
+      : metrics.viewport / 2 -
+        (trackIndex * (metrics.slide + metrics.gap) + metrics.slide / 2);
 
   return (
     <section
@@ -118,14 +224,14 @@ export default function LivroParafraseado() {
       className="overflow-x-clip border-t border-rule bg-paper-strong"
     >
       <div className="mx-auto max-w-[90rem] px-6 py-16 md:px-8 md:py-20 lg:px-12 lg:py-24 xl:px-16">
-        <div className="lg:grid lg:grid-cols-12 lg:items-end lg:gap-x-12">
+        <div className="lg:grid lg:grid-cols-12 lg:items-start lg:gap-x-12 xl:gap-x-16">
           <div className="lg:col-span-6">
             <p className="font-sans text-[0.7rem] font-medium tracking-[0.22em] text-ink uppercase">
-              Projeto
+              Reflexões
             </p>
             <h2
               id="livro-parafraseado-heading"
-              className="mt-6 font-display text-[2.5rem] leading-[0.95] tracking-tight text-ink md:mt-8 md:text-[3.25rem] lg:text-[3.75rem] xl:text-[4.25rem]"
+              className="mt-5 font-display text-[2.5rem] leading-[0.95] tracking-tight text-ink md:mt-6 md:text-[3.25rem] lg:text-[3.75rem] xl:text-[4.25rem]"
             >
               <span className="block">Livro</span>
               <span className="block">Parafraseado</span>
@@ -154,69 +260,107 @@ export default function LivroParafraseado() {
         </div>
 
         <div
-          className="mt-12 md:mt-14 lg:mt-16"
+          className="mt-10 md:mt-12 lg:mt-14"
           role="region"
           aria-roledescription="carrossel"
           aria-label="Publicações do Livro Parafraseado"
+          tabIndex={0}
+          onKeyDown={handleKeyDown}
         >
-          <div
-            ref={scrollerRef}
-            className="flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain px-[7%] [scrollbar-width:none] touch-pan-x md:gap-5 md:px-[15%] lg:gap-6 lg:px-[calc(50%-15rem)] [&::-webkit-scrollbar]:hidden"
-          >
-            {PUBLICATIONS.map((publication, index) => {
-              const isActive = index === activeIndex;
+          <div ref={viewportRef} className="overflow-hidden">
+            <div
+              ref={trackRef}
+              className="flex w-full gap-5 md:gap-6 lg:gap-8"
+              style={{
+                transform: `translate3d(${translateX}px, 0, 0)`,
+                transition: withTransition
+                  ? `transform ${TRANSITION_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`
+                  : "none",
+                visibility: metrics.slide ? "visible" : "hidden",
+              }}
+              onTransitionEnd={handleTransitionEnd}
+            >
+              {TRACK_SLIDES.map((publication, index) => {
+                const logicalIndex = logicalIndexFromTrack(index);
+                const isActive = logicalIndex === activeIndex;
 
-              return (
-                <figure
-                  key={publication.src}
-                  data-slide={index}
-                  aria-hidden={!isActive}
-                  className="w-[86%] shrink-0 snap-center md:w-[70%] lg:w-[30rem]"
-                >
-                  <div
-                    className={`origin-center motion-safe:transition-[transform,opacity] motion-safe:duration-300 motion-safe:ease-out ${
-                      isActive
-                        ? "scale-100 opacity-100"
-                        : "scale-[0.88] opacity-55 md:opacity-50"
-                    }`}
+                return (
+                  <figure
+                    key={publication.key}
+                    data-slide={index}
+                    aria-hidden={!isActive}
+                    className="w-[76%] shrink-0 md:w-[56%] lg:w-[22rem] xl:w-[24rem]"
                   >
-                    <Image
-                      src={publication.src}
-                      alt={publication.alt}
-                      width={publication.width}
-                      height={publication.height}
-                      draggable={false}
-                      sizes="(min-width: 1024px) 30rem, (min-width: 768px) 70vw, 86vw"
-                      className="h-auto w-full object-contain"
-                    />
-                  </div>
-                </figure>
-              );
-            })}
+                    <div
+                      className={`origin-center motion-safe:transition-[transform,opacity] motion-safe:duration-500 motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                        isActive
+                          ? "scale-100 opacity-100"
+                          : "scale-[0.82] opacity-35"
+                      }`}
+                    >
+                      <Image
+                        src={publication.src}
+                        alt={isActive ? publication.alt : ""}
+                        width={publication.width}
+                        height={publication.height}
+                        draggable={false}
+                        sizes="(min-width: 1280px) 24rem, (min-width: 1024px) 22rem, (min-width: 768px) 56vw, 76vw"
+                        className="h-auto w-full object-contain"
+                        onLoad={measure}
+                      />
+                    </div>
+                  </figure>
+                );
+              })}
+            </div>
           </div>
 
-          <div className="mt-6 flex items-center justify-center gap-8 md:mt-8">
+          <div className="mt-6 flex items-center justify-center gap-6 md:mt-8 md:gap-8">
             <button
               type="button"
               className={controlClassName}
               aria-label="Publicação anterior"
-              disabled={activeIndex === 0}
-              onClick={() => goTo(activeIndex - 1)}
+              onClick={goPrevious}
             >
               ←
             </button>
-            <p
-              className="min-w-[4.5rem] text-center font-sans text-[0.7rem] tracking-[0.18em] text-ink tabular-nums"
-              aria-live="polite"
+
+            <div
+              className="flex items-center gap-1.5"
+              role="tablist"
+              aria-label="Selecionar publicação"
             >
-              {counter}
-            </p>
+              {PUBLICATIONS.map((publication, index) => {
+                const isActive = index === activeIndex;
+
+                return (
+                  <button
+                    key={publication.src}
+                    type="button"
+                    role="tab"
+                    aria-label={`Ir para publicação ${index + 1} de ${ITEM_COUNT}`}
+                    aria-current={isActive ? "true" : undefined}
+                    aria-selected={isActive}
+                    className="inline-flex min-h-11 min-w-7 cursor-pointer items-center justify-center border-0 bg-transparent p-0 appearance-none focus-visible:outline-none"
+                    onClick={() => goTo(index)}
+                  >
+                    <span
+                      className={`block h-1.5 w-1.5 rounded-full motion-safe:transition-[transform,background-color,opacity] motion-safe:duration-300 ${
+                        isActive
+                          ? "scale-125 bg-ink"
+                          : "bg-ink/25 hover:bg-ink/45"
+                      }`}
+                    />
+                  </button>
+                );
+              })}
+            </div>
+
             <button
               type="button"
               className={controlClassName}
               aria-label="Próxima publicação"
-              disabled={activeIndex === PUBLICATIONS.length - 1}
-              onClick={() => goTo(activeIndex + 1)}
+              onClick={goNext}
             >
               →
             </button>

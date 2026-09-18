@@ -129,18 +129,48 @@ Não criar todas antecipadamente. Implementar conforme aprovação.
 
 ## Integrações
 
-Neste momento NÃO fazem parte da arquitetura aprovada:
+Aprovado nesta fase (infraestrutura, sem checkout comercial ativo):
 
-- Supabase;
-- banco de dados;
-- autenticação;
+- Supabase / PostgreSQL para catálogo e pedidos;
+- cliente server-side com `SUPABASE_URL` e `SUPABASE_SECRET_KEY` (`lib/supabase/server.ts`); essas variáveis são somente servidor e não usam prefixo `NEXT_PUBLIC_`;
+- Route Handlers `GET /api/products/[sku]` e `POST /api/orders`.
+
+Ainda **não** fazem parte da arquitetura em uso:
+
+- Mercado Pago / Payment Brick / webhooks;
+- autenticação de admin;
 - CMS;
-- pagamentos próprios;
+- Resend / e-mail transacional;
+- cálculo real de frete;
 - newsletter;
-- analytics específico;
-- automações externas.
+- analytics específico.
 
-Cada integração futura exige análise e aprovação separada.
+### Comércio
+
+Fonte de verdade de preço, disponibilidade e totais: **servidor + banco**. O frontend não envia nem decide `price`, `shipping` ou `total`.
+
+`lib/commerce/product.ts` guarda só dados editoriais da UI (SKU, título, capa, limites de quantidade). `price_cents` e `is_active` vêm de `products`.
+
+Frete: `lib/commerce/shipping.ts`, estratégia atual `unconfigured`. Sem frete grátis, sem R$ 0 e sem valor fictício. `POST /api/orders` recusa a compra enquanto isso.
+
+Status independentes em `orders`:
+
+- `payment_status`: `pending` | `approved` | `rejected` | `cancelled` | `refunded`
+- `fulfillment_status`: `pending` | `preparing` | `shipped` | `delivered` | `cancelled`
+
+Pagamento aprovado + envio em preparação: `payment_status = approved` e `fulfillment_status = preparing`. Pagamento **não** vira `shipped`.
+
+Tentativas de pagamento ficam em `payments` (histórico). Eventos em `order_events`. Nenhum campo de cartão (PAN, CVV, validade, token PCI).
+
+RLS está ligado nas tabelas comerciais **sem** políticas para `anon`/`authenticated`. O App Router acessa o banco só com `SUPABASE_SECRET_KEY` no servidor. Catálogo público, quando existir, passará pela nossa API — não por SELECT anônimo no Supabase.
+
+A migration semeia `AVIDA-FISICO` e `AVIDA-EBOOK`, ambos inativos e sem preço. O arquivo do e-book não entra no repositório nem em `public/`.
+
+Checkout visual em `/livro/comprar` permanece desabilitado: produto inativo, preço nulo, frete não configurado, Mercado Pago ainda inexistente.
+
+A migration em `supabase/migrations/` precisa ser aplicada manualmente no projeto Supabase. Não assume ambiente já provisionado.
+
+CPF: persistir 11 dígitos, sem máscara. Validação atual é de formato/tamanho, não do dígito verificador.
 
 ## Imagens
 

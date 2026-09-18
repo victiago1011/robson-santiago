@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 function IconCart() {
   return (
     <svg
@@ -50,19 +52,6 @@ function IconDispositivo() {
   );
 }
 
-const EDICOES = [
-  {
-    nome: "Livro físico",
-    descricao: "Edição impressa.",
-    Icone: IconLivro,
-  },
-  {
-    nome: "E-book",
-    descricao: "Edição digital.",
-    Icone: IconDispositivo,
-  },
-] as const;
-
 export default function LivroEdicoes() {
   return (
     <section
@@ -80,28 +69,39 @@ export default function LivroEdicoes() {
           </h2>
 
           <ul className="mt-10 grid divide-y divide-rule md:mt-12 md:grid-cols-2 md:divide-x md:divide-y-0">
-            {EDICOES.map((edicao) => (
-              <li
-                key={edicao.nome}
-                className="flex flex-col items-center px-2 py-8 text-center md:px-10 md:py-2 md:first:pr-12 md:last:pl-12"
+            <li className="flex flex-col items-center px-2 py-8 text-center md:px-10 md:py-2 md:pr-12">
+              <IconLivro />
+              <p className="mt-5 font-sans text-[0.7rem] font-medium tracking-[0.22em] text-ink uppercase">
+                Livro físico
+              </p>
+              <p className="mt-2 font-display text-lg text-ink-soft italic">
+                Edição impressa.
+              </p>
+              <Link
+                href="/livro/comprar"
+                className="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-ink px-4 font-sans text-sm font-medium tracking-[0.12em] text-paper-strong uppercase whitespace-nowrap hover:bg-ink/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/40"
               >
-                <edicao.Icone />
-                <p className="mt-5 font-sans text-[0.7rem] font-medium tracking-[0.22em] text-ink uppercase">
-                  {edicao.nome}
-                </p>
-                <p className="mt-2 font-display text-lg text-ink-soft italic">
-                  {edicao.descricao}
-                </p>
-                <button
-                  type="button"
-                  aria-disabled="true"
-                  className="mt-6 inline-flex min-h-11 cursor-default items-center gap-2 rounded-lg bg-ink px-5 font-sans text-sm font-medium tracking-[0.14em] text-paper-strong uppercase"
-                >
-                  <IconCart />
-                  Comprar em breve
-                </button>
-              </li>
-            ))}
+                <IconCart />
+                Comprar livro físico
+              </Link>
+            </li>
+            <li className="flex flex-col items-center px-2 py-8 text-center md:px-10 md:py-2 md:pl-12">
+              <IconDispositivo />
+              <p className="mt-5 font-sans text-[0.7rem] font-medium tracking-[0.22em] text-ink uppercase">
+                E-book
+              </p>
+              <p className="mt-2 font-display text-lg text-ink-soft italic">
+                Edição digital.
+              </p>
+              <button
+                type="button"
+                aria-disabled="true"
+                className="mt-6 inline-flex min-h-11 cursor-default items-center gap-2 rounded-lg bg-ink px-5 font-sans text-sm font-medium tracking-[0.14em] text-paper-strong uppercase opacity-45"
+              >
+                <IconCart />
+                Em breve
+              </button>
+            </li>
           </ul>
         </div>
       </div>

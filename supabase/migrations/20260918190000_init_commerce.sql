@@ -8,6 +8,7 @@ create extension if not exists pgcrypto;
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
+set search_path = pg_catalog
 as $$
 begin
   new.updated_at = now();
@@ -40,13 +41,13 @@ create table public.orders (
   customer_email text not null,
   customer_phone text not null,
   customer_document text not null,
-  shipping_zip text not null,
-  shipping_street text not null,
-  shipping_number text not null,
+  shipping_zip text,
+  shipping_street text,
+  shipping_number text,
   shipping_complement text,
-  shipping_district text not null,
-  shipping_city text not null,
-  shipping_state text not null,
+  shipping_district text,
+  shipping_city text,
+  shipping_state text,
   subtotal_cents integer,
   shipping_cents integer,
   total_cents integer,
@@ -70,7 +71,9 @@ create table public.orders (
     and (total_cents is null or total_cents >= 0)
   ),
   constraint orders_currency_check check (currency = 'BRL'),
-  constraint orders_shipping_state_check check (char_length(shipping_state) = 2)
+  constraint orders_shipping_state_check check (
+    shipping_state is null or char_length(shipping_state) = 2
+  )
 );
 
 comment on column public.orders.payment_status is
@@ -85,6 +88,8 @@ comment on column public.orders.subtotal_cents is
   'Integer cents. NULL until pricing exists. Never use 0 to mean unset.';
 comment on column public.orders.shipping_cents is
   'Integer cents. NULL until shipping is configured. 0 would mean free shipping only after that policy is explicit.';
+comment on column public.orders.shipping_zip is
+  'Required for physical products in application validation. NULL allowed for digital-only orders.';
 
 create table public.order_items (
   id uuid primary key default gen_random_uuid(),

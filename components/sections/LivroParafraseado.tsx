@@ -113,6 +113,7 @@ export default function LivroParafraseado() {
 
   return (
     <section
+      id="reflexoes"
       aria-labelledby="livro-parafraseado-heading"
       className="overflow-x-clip border-t border-rule bg-paper-strong"
     >

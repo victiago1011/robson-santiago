@@ -1,15 +1,15 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type MouseEvent } from "react";
 import Link from "next/link";
 
 const navItems = [
-  { label: "Sobre" },
-  { label: "Livro", href: "/livro" },
-  { label: "VEZ" },
-  { label: "Reflexões" },
-  { label: "Projetos" },
-  { label: "Contato" },
+  { label: "Sobre", href: "/#sobre" },
+  { label: "Finanças", href: "/#financas" },
+  { label: "Livros", href: "/livro" },
+  { label: "VEZ", href: "/#vez" },
+  { label: "Reflexões", href: "/#reflexoes" },
+  { label: "Projetos", href: "/#projetos" },
 ] as const;
 
 const desktopQuery = "(min-width: 1024px)";
@@ -27,17 +27,34 @@ function NavItems({
   className: string;
   onNavigate?: () => void;
 }) {
+  const handleNavigate = (href: string) => (event: MouseEvent<HTMLAnchorElement>) => {
+    window.setTimeout(() => onNavigate?.(), 0);
+
+    if (!href.startsWith("/#") || window.location.pathname !== "/") {
+      return;
+    }
+
+    event.preventDefault();
+    const id = href.slice(2);
+    document.getElementById(id)?.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "auto"
+        : "smooth",
+    });
+    window.history.replaceState(null, "", href);
+  };
+
   return (
     <ul className={className}>
       {navItems.map((item) => (
         <li key={item.label}>
-          {"href" in item ? (
-            <Link href={item.href} className={navLinkClassName} onClick={onNavigate}>
-              {item.label}
-            </Link>
-          ) : (
-            <span className="cursor-default">{item.label}</span>
-          )}
+          <Link
+            href={item.href}
+            className={navLinkClassName}
+            onClick={handleNavigate(item.href)}
+          >
+            {item.label}
+          </Link>
         </li>
       ))}
     </ul>
@@ -118,7 +135,7 @@ export default function Header() {
         </Link>
 
         <nav className="hidden lg:block" aria-label="Principal">
-          <NavItems className="flex items-center gap-8 font-sans text-[0.7rem] tracking-[0.16em] text-ink uppercase" />
+          <NavItems className="flex items-center gap-5 font-sans text-[0.7rem] tracking-[0.16em] text-ink uppercase xl:gap-8" />
         </nav>
 
         <button

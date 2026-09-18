@@ -33,6 +33,11 @@ export default function Hero() {
           <p className="mt-6 max-w-md font-display text-lg leading-snug text-paper/85 italic md:mt-8 md:text-xl md:text-ink-soft lg:max-w-sm">
             Ideias para viver o que realmente importa.
           </p>
+          <p className="mt-5 hidden max-w-md font-sans text-sm leading-relaxed text-ink-soft md:mt-6 md:block md:text-base lg:max-w-sm">
+            Experiência, conhecimento e reflexões construídas ao longo de mais
+            de quatro décadas no mercado financeiro — e de uma vida dedicada a
+            pessoas, livros, relacionamentos e projetos com propósito.
+          </p>
         </div>
       </div>
     </section>

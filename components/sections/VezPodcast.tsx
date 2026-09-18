@@ -8,7 +8,7 @@ const WAVEFORM = [
 
 export default function VezPodcast() {
   return (
-    <section aria-labelledby="vez-heading" className="bg-ink">
+    <section id="vez" aria-labelledby="vez-heading" className="bg-ink">
       <div className="mx-auto grid max-w-[90rem] px-6 py-16 md:px-8 md:py-24 lg:grid-cols-12 lg:items-center lg:gap-x-12 lg:px-12 lg:py-32 xl:px-16">
         <div className="text-center md:text-left lg:col-span-7">
           <p className="font-sans text-[0.7rem] font-medium tracking-[0.22em] text-rule uppercase">

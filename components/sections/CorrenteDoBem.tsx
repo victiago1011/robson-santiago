@@ -4,7 +4,7 @@ const CORRENTE_URL = "https://www.correntedobembr.com.br/";
 
 export default function CorrenteDoBem() {
   return (
-    <section aria-labelledby="corrente-heading" className="bg-paper">
+    <section id="projetos" aria-labelledby="corrente-heading" className="bg-paper">
       <div className="lg:grid lg:min-h-[min(85svh,46rem)] lg:grid-cols-2">
         <figure className="relative h-[min(70svh,32rem)] min-h-[20rem] bg-photo-placeholder lg:h-auto lg:min-h-full">
           <Image

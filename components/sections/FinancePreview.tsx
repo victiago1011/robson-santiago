@@ -19,52 +19,50 @@ const modules = [
 export default function FinancePreview() {
   return (
     <section id="financas" aria-labelledby="financas-heading" className="bg-paper">
-      <div className="mx-auto max-w-[90rem] px-6 py-20 md:px-8 md:py-28 lg:px-12 lg:py-36 xl:px-16">
+      <div className="mx-auto max-w-[90rem] px-6 py-12 md:px-8 md:py-28 lg:px-12 lg:py-36 xl:px-16">
         <p className="font-sans text-[0.7rem] font-medium tracking-[0.22em] text-ink uppercase">
           Finanças & Mercado
         </p>
         <h2
           id="financas-heading"
-          className="mt-8 max-w-[44rem] font-display text-[1.85rem] leading-[1.15] tracking-tight text-ink md:mt-10 md:text-[2.5rem] md:leading-[1.12] lg:text-5xl xl:text-[3.25rem]"
+          className="mt-5 max-w-[40rem] font-display text-[1.7rem] leading-[1.18] tracking-tight text-ink md:mt-10 md:max-w-[44rem] md:text-[2.5rem] md:leading-[1.12] lg:text-5xl xl:text-[3.25rem]"
         >
           Mais de quatro décadas vivendo o mercado financeiro.
         </h2>
-        <p className="mt-8 max-w-[40rem] font-sans text-base leading-relaxed text-ink-soft md:mt-10 md:text-lg">
+        <p className="mt-5 max-w-[36rem] font-sans text-base leading-relaxed text-ink-soft md:mt-10 md:max-w-[40rem] md:text-lg">
           Finanças continuam sendo um dos pilares centrais da trajetória de
           Robson Santiago. Mais do que experiência acumulada, essa vivência
           segue presente nas conversas, conexões, conteúdos e projetos que
           fazem parte do seu dia a dia.
         </p>
 
-        <div className="mt-12 border-t border-rule md:mt-16 lg:mt-20 lg:grid lg:grid-cols-12 lg:border lg:border-rule">
-          <article className="bg-paper-strong py-10 md:py-12 lg:col-span-7 lg:flex lg:flex-col lg:justify-center lg:border-r lg:border-rule lg:px-12 lg:py-16 xl:px-16">
+        <div className="mt-8 border-t border-rule md:mt-16 lg:mt-20 lg:grid lg:grid-cols-12 lg:border lg:border-rule">
+          <article className="py-8 lg:col-span-7 lg:flex lg:flex-col lg:justify-center lg:border-r lg:border-rule lg:bg-paper-strong lg:px-12 lg:py-16 xl:px-16">
             <h3 className="font-sans text-[0.7rem] font-medium tracking-[0.22em] text-ink uppercase">
               Experiência de Mercado
             </h3>
-            <p className="mt-8 font-display text-[2rem] leading-none tracking-tight text-ink md:mt-10 md:text-[2.35rem] lg:text-[2.75rem]">
+            <p className="mt-5 font-display text-[2.5rem] leading-none tracking-tight text-ink md:mt-10 lg:text-[2.75rem]">
               +40 anos
             </p>
-            <p className="mt-3 font-sans text-sm leading-relaxed text-ink-soft md:text-base">
+            <p className="mt-2 font-sans text-sm leading-relaxed text-ink-soft md:mt-3 md:text-base">
               de mercado financeiro
             </p>
-            <p className="mt-8 max-w-[22rem] font-display text-xl leading-snug tracking-tight text-ink italic md:mt-10 md:max-w-[28rem] md:text-[1.65rem] lg:text-[1.85rem]">
+            <p className="mt-5 max-w-[22rem] font-display text-xl leading-snug tracking-tight text-ink italic md:mt-10 md:max-w-[28rem] md:text-[1.65rem] lg:text-[1.85rem]">
               Vivência que atravessa diferentes ciclos
             </p>
-            <div aria-hidden="true" className="mt-8 h-px w-12 bg-rule md:mt-10" />
-            <p className="mt-8 max-w-[32rem] font-sans text-base leading-relaxed text-ink-soft md:mt-10 md:text-lg">
+            <div aria-hidden="true" className="mt-5 h-px w-12 bg-rule md:mt-10" />
+            <p className="mt-5 max-w-[32rem] font-sans text-base leading-relaxed text-ink-soft md:mt-10 md:text-lg">
               Mais de quatro décadas acompanhando empresas, empresários,
               executivos e as transformações do ambiente econômico e financeiro.
             </p>
           </article>
 
-          <div className="grid border-t border-rule md:grid-cols-3 lg:col-span-5 lg:grid-cols-1 lg:border-t-0">
+          <div className="lg:col-span-5 lg:border-t-0">
             {modules.map((module, index) => (
               <article
                 key={module.title}
-                className={`py-8 md:px-6 md:py-8 lg:px-8 lg:py-9 xl:px-10 ${
-                  index > 0
-                    ? "border-t border-rule md:border-t-0 md:border-l lg:border-l-0 lg:border-t"
-                    : ""
+                className={`border-t border-rule py-6 lg:px-8 lg:py-9 xl:px-10 ${
+                  index === 0 ? "lg:border-t-0" : ""
                 }`}
               >
                 <h3 className="font-sans text-[0.7rem] font-medium tracking-[0.22em] text-ink uppercase">

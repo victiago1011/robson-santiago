@@ -28,7 +28,7 @@ const pillars = [
 export default function AboutPreview() {
   return (
     <section id="sobre" aria-labelledby="sobre-heading" className="bg-paper-strong">
-      <div className="mx-auto max-w-[90rem] px-6 py-20 md:px-8 md:py-28 lg:px-12 lg:py-36 xl:px-16">
+      <div className="mx-auto max-w-[90rem] px-6 py-12 md:px-8 md:py-28 lg:px-12 lg:py-36 xl:px-16">
         <div className="lg:grid lg:grid-cols-12 lg:gap-x-12 xl:gap-x-16">
           <div className="lg:col-span-5">
             <p className="font-sans text-[0.7rem] font-medium tracking-[0.22em] text-ink uppercase">
@@ -36,22 +36,22 @@ export default function AboutPreview() {
             </p>
             <h2
               id="sobre-heading"
-              className="mt-8 max-w-[28rem] font-display text-[1.85rem] leading-[1.15] tracking-tight text-ink md:mt-10 md:text-[2.5rem] md:leading-[1.12] lg:text-[2.75rem] xl:text-[3.25rem]"
+              className="mt-5 max-w-[28rem] font-display text-[1.7rem] leading-[1.18] tracking-tight text-ink md:mt-10 md:text-[2.5rem] md:leading-[1.12] lg:text-[2.75rem] xl:text-[3.25rem]"
             >
               Uma trajetória construída entre pessoas, conhecimento e experiência.
             </h2>
-            <p className="mt-8 max-w-[28rem] font-sans text-base leading-relaxed text-ink-soft md:mt-10 md:text-lg">
+            <p className="mt-5 max-w-[28rem] font-sans text-base leading-relaxed text-ink-soft md:mt-10 md:text-lg">
               Há mais de quatro décadas, Robson Santiago constrói uma trajetória
               marcada pelo mercado financeiro, pelas relações humanas, pelo
               aprendizado contínuo e pela vontade de compartilhar conhecimento.
             </p>
           </div>
 
-          <ol className="mt-14 border-t border-rule lg:col-span-6 lg:col-start-7 lg:mt-0 lg:border-t-0">
+          <ol className="mt-8 border-t border-rule lg:col-span-6 lg:col-start-7 lg:mt-0 lg:border-t-0">
             {pillars.map((pillar, index) => (
               <li
                 key={pillar.number}
-                className={`grid grid-cols-[auto_1fr] gap-x-5 py-8 md:gap-x-8 md:py-9 ${
+                className={`grid grid-cols-[auto_1fr] gap-x-5 py-5 md:gap-x-8 md:py-9 ${
                   index === 0 ? "lg:pt-0" : "border-t border-rule"
                 }`}
               >
@@ -65,7 +65,7 @@ export default function AboutPreview() {
                   <p className="mt-2 font-display text-base leading-snug text-ink-soft italic md:text-lg">
                     {pillar.lead}
                   </p>
-                  <p className="mt-4 max-w-[32rem] font-sans text-sm leading-relaxed text-ink-soft md:text-base">
+                  <p className="mt-3 max-w-[32rem] font-sans text-sm leading-relaxed text-ink-soft md:mt-4 md:text-base">
                     {pillar.body}
                   </p>
                 </div>

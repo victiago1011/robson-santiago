@@ -1,5 +1,8 @@
 import Image from "next/image";
 
+const heroComplement =
+  "Experiência, conhecimento e reflexões construídas ao longo de mais de quatro décadas no mercado financeiro — e de uma vida dedicada a pessoas, livros, relacionamentos e projetos com propósito.";
+
 export default function Hero() {
   return (
     <section
@@ -22,7 +25,7 @@ export default function Hero() {
           <div className="pointer-events-none absolute inset-y-0 left-0 hidden w-28 bg-gradient-to-r from-paper to-transparent lg:block" />
         </figure>
 
-        <div className="absolute inset-x-0 bottom-0 z-10 px-6 pb-12 md:static md:px-8 md:py-14 lg:col-span-5 lg:col-start-1 lg:row-start-1 lg:flex lg:flex-col lg:justify-center lg:px-12 lg:py-24 xl:px-16">
+        <div className="absolute inset-x-0 bottom-0 z-10 px-6 pb-10 md:static md:px-8 md:py-14 lg:col-span-5 lg:col-start-1 lg:row-start-1 lg:flex lg:flex-col lg:justify-center lg:px-12 lg:py-24 xl:px-16">
           <h1
             id="hero-heading"
             className="font-display text-[2.75rem] leading-[0.95] tracking-tight text-paper md:text-6xl md:text-ink lg:text-7xl xl:text-[5.5rem]"
@@ -30,15 +33,19 @@ export default function Hero() {
             <span className="block">Robson</span>
             <span className="block">Santiago</span>
           </h1>
-          <p className="mt-6 max-w-md font-display text-lg leading-snug text-paper/85 italic md:mt-8 md:text-xl md:text-ink-soft lg:max-w-sm">
+          <p className="mt-5 max-w-md font-display text-lg leading-snug text-paper/85 italic md:mt-8 md:text-xl md:text-ink-soft lg:max-w-sm">
             Ideias para viver o que realmente importa.
           </p>
-          <p className="mt-5 hidden max-w-md font-sans text-sm leading-relaxed text-ink-soft md:mt-6 md:block md:text-base lg:max-w-sm">
-            Experiência, conhecimento e reflexões construídas ao longo de mais
-            de quatro décadas no mercado financeiro — e de uma vida dedicada a
-            pessoas, livros, relacionamentos e projetos com propósito.
+          <p className="mt-6 hidden max-w-md font-sans text-sm leading-relaxed text-ink-soft md:block md:text-base lg:max-w-sm">
+            {heroComplement}
           </p>
         </div>
+      </div>
+
+      <div className="mx-auto max-w-[90rem] px-6 pt-6 pb-2 md:hidden">
+        <p className="max-w-md font-sans text-base leading-relaxed text-ink-soft">
+          {heroComplement}
+        </p>
       </div>
     </section>
   );

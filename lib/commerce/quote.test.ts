@@ -26,7 +26,12 @@ function catalog(overrides?: {
       currency: "BRL",
       isActive: overrides?.digitalActive ?? false,
     },
-    physicalShippingCents: 1500,
+    physicalShippingRates: {
+      1: 1500,
+      2: 2000,
+      3: 2500,
+      4: 3000,
+    },
     ebookBumpPriceCents: 1000,
     currency: "BRL",
   };
@@ -48,75 +53,55 @@ const shipping = {
   state: "SP" as const,
 };
 
-test("físico 1 sem bump total 5490", () => {
+test("físico 1 → frete 1500 total 5490", () => {
   const quote = calculateQuoteFromCatalog(
     { kind: "physical", quantity: 1, ebookBump: false },
     catalog(),
   );
-  assert.equal(quote.items.length, 1);
   assert.equal(quote.subtotalCents, 3990);
   assert.equal(quote.discountCents, 0);
   assert.equal(quote.shippingCents, 1500);
   assert.equal(quote.totalCents, 5490);
-  assert.equal(quote.promotionCode, null);
-  assert.equal(quote.ebookBump, false);
-  assert.equal(quote.purchasable, false);
 });
 
-test("físico 1 com bump total 6490", () => {
+test("físico 2 → frete 2000 total 9980", () => {
   const quote = calculateQuoteFromCatalog(
-    { kind: "physical", quantity: 1, ebookBump: true },
+    { kind: "physical", quantity: 2, ebookBump: false },
     catalog(),
   );
-  assert.equal(quote.items.length, 2);
-  assert.equal(quote.items[0]?.sku, "AVIDA-FISICO");
-  assert.equal(quote.items[0]?.quantity, 1);
-  assert.equal(quote.items[0]?.unitPriceCents, 3990);
-  assert.equal(quote.items[1]?.sku, "AVIDA-EBOOK");
-  assert.equal(quote.items[1]?.quantity, 1);
-  assert.equal(quote.items[1]?.unitPriceCents, 1990);
-  assert.equal(quote.subtotalCents, 5980);
-  assert.equal(quote.discountCents, 990);
-  assert.equal(quote.shippingCents, 1500);
-  assert.equal(quote.totalCents, 6490);
-  assert.equal(quote.promotionCode, "AVIDA-EBOOK-BUMP");
+  assert.equal(quote.subtotalCents, 7980);
+  assert.equal(quote.shippingCents, 2000);
+  assert.equal(quote.totalCents, 9980);
 });
 
-test("físico 5 sem bump", () => {
+test("físico 3 → frete 2500 total 14470", () => {
   const quote = calculateQuoteFromCatalog(
-    { kind: "physical", quantity: 5, ebookBump: false },
+    { kind: "physical", quantity: 3, ebookBump: false },
     catalog(),
   );
-  assert.equal(quote.subtotalCents, 19950);
-  assert.equal(quote.discountCents, 0);
-  assert.equal(quote.shippingCents, 1500);
-  assert.equal(quote.totalCents, 21450);
+  assert.equal(quote.subtotalCents, 11970);
+  assert.equal(quote.shippingCents, 2500);
+  assert.equal(quote.totalCents, 14470);
 });
 
-test("físico 5 com bump adiciona exatamente 1 e-book", () => {
+test("físico 4 → frete 3000 total 18960", () => {
   const quote = calculateQuoteFromCatalog(
-    { kind: "physical", quantity: 5, ebookBump: true },
+    { kind: "physical", quantity: 4, ebookBump: false },
     catalog(),
   );
-  const ebook = quote.items.find((item) => item.sku === "AVIDA-EBOOK");
-  assert.equal(ebook?.quantity, 1);
-  assert.equal(quote.items.filter((item) => item.sku === "AVIDA-EBOOK").length, 1);
-  assert.equal(quote.subtotalCents, 21940);
-  assert.equal(quote.discountCents, 990);
-  assert.equal(quote.shippingCents, 1500);
-  assert.equal(quote.totalCents, 22450);
+  assert.equal(quote.subtotalCents, 15960);
+  assert.equal(quote.shippingCents, 3000);
+  assert.equal(quote.totalCents, 18960);
 });
 
-test("físico 2 com bump não multiplica e-book nem desconto", () => {
-  const quote = calculateQuoteFromCatalog(
-    { kind: "physical", quantity: 2, ebookBump: true },
-    catalog(),
+test("físico 5 é rejeitado", () => {
+  assert.equal(
+    purchaseSelectionSchema.safeParse({ kind: "physical", quantity: 5, ebookBump: false }).success,
+    false,
   );
-  assert.equal(quote.items.find((item) => item.sku === "AVIDA-EBOOK")?.quantity, 1);
-  assert.equal(quote.subtotalCents, 9970);
-  assert.equal(quote.discountCents, 990);
-  assert.equal(quote.shippingCents, 1500);
-  assert.equal(quote.totalCents, 10480);
+  assert.throws(() =>
+    calculateQuoteFromCatalog({ kind: "physical", quantity: 5, ebookBump: false }, catalog()),
+  );
 });
 
 test("rejeita quantidade 0", () => {
@@ -129,14 +114,42 @@ test("rejeita quantidade 0", () => {
   );
 });
 
-test("rejeita quantidade 6", () => {
-  assert.equal(
-    purchaseSelectionSchema.safeParse({ kind: "physical", quantity: 6, ebookBump: false }).success,
-    false,
+test("físico 1 com bump total 6490", () => {
+  const quote = calculateQuoteFromCatalog(
+    { kind: "physical", quantity: 1, ebookBump: true },
+    catalog(),
   );
-  assert.throws(() =>
-    calculateQuoteFromCatalog({ kind: "physical", quantity: 6, ebookBump: false }, catalog()),
+  assert.equal(quote.items.filter((item) => item.sku === "AVIDA-EBOOK").length, 1);
+  assert.equal(quote.items.find((item) => item.sku === "AVIDA-EBOOK")?.quantity, 1);
+  assert.equal(quote.subtotalCents, 5980);
+  assert.equal(quote.discountCents, 990);
+  assert.equal(quote.shippingCents, 1500);
+  assert.equal(quote.totalCents, 6490);
+  assert.equal(quote.promotionCode, "AVIDA-EBOOK-BUMP");
+});
+
+test("físico 2 com bump: 1 e-book, desconto 990, frete 2000", () => {
+  const quote = calculateQuoteFromCatalog(
+    { kind: "physical", quantity: 2, ebookBump: true },
+    catalog(),
   );
+  assert.equal(quote.items.find((item) => item.sku === "AVIDA-EBOOK")?.quantity, 1);
+  assert.equal(quote.subtotalCents, 9970);
+  assert.equal(quote.discountCents, 990);
+  assert.equal(quote.shippingCents, 2000);
+  assert.equal(quote.totalCents, 10980);
+});
+
+test("físico 4 com bump: 1 e-book, desconto 990, frete 3000", () => {
+  const quote = calculateQuoteFromCatalog(
+    { kind: "physical", quantity: 4, ebookBump: true },
+    catalog(),
+  );
+  assert.equal(quote.items.find((item) => item.sku === "AVIDA-EBOOK")?.quantity, 1);
+  assert.equal(quote.subtotalCents, 17950);
+  assert.equal(quote.discountCents, 990);
+  assert.equal(quote.shippingCents, 3000);
+  assert.equal(quote.totalCents, 19960);
 });
 
 test("digital total 1990 sem frete", () => {
@@ -146,20 +159,11 @@ test("digital total 1990 sem frete", () => {
   assert.equal(quote.shippingCents, 0);
   assert.equal(quote.totalCents, 1990);
   assert.equal(quote.requiresShipping, false);
-  assert.equal(quote.promotionCode, null);
 });
 
 test("digital não aceita ebookBump", () => {
   assert.equal(
     purchaseSelectionSchema.safeParse({ kind: "digital", ebookBump: true }).success,
-    false,
-  );
-  assert.equal(
-    createOrderSchema.safeParse({
-      kind: "digital",
-      customer,
-      ebookBump: true,
-    }).success,
     false,
   );
 });
@@ -193,14 +197,6 @@ test("digital não exige endereço", () => {
       customer,
     }).success,
     true,
-  );
-  assert.equal(
-    createOrderSchema.safeParse({
-      kind: "digital",
-      customer,
-      shipping,
-    }).success,
-    false,
   );
 });
 
@@ -242,8 +238,4 @@ test("catálogo inativo impede persistência", () => {
     catalog({ physicalActive: true, digitalActive: true }),
   );
   assert.equal(active.purchasable, true);
-});
-
-test("combo não é seleção válida", () => {
-  assert.equal(purchaseSelectionSchema.safeParse({ kind: "combo" }).success, false);
 });

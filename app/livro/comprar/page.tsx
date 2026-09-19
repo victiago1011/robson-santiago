@@ -43,7 +43,7 @@ export default async function ComprarLivroPage({ searchParams }: ComprarLivroPag
   const initialQuote = await getPublicQuote(selectionFromKind(kind));
 
   return (
-    <main className="flex flex-1 flex-col bg-paper">
+    <main data-checkout-page className="flex flex-1 flex-col bg-white">
       <div className="mx-auto w-full max-w-[90rem] px-6 py-10 md:px-8 md:py-14 lg:px-12 lg:py-16 xl:px-16">
         <Link
           href="/livro#comprar"

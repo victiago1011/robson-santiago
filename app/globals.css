@@ -33,6 +33,13 @@ body {
   font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
+body:has([data-checkout-page]) {
+  --paper: #ffffff;
+  --paper-strong: #ffffff;
+  --rule: #e6e4e0;
+  background: #ffffff;
+}
+
 html.menu-open,
 html.menu-open body {
   overflow: hidden;

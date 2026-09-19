@@ -2,9 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import CustomerFields from "@/components/checkout/CustomerFields";
-import EbookBumpOffer from "@/components/checkout/EbookBumpOffer";
 import OrderSummary from "@/components/checkout/OrderSummary";
-import PaymentPlaceholder from "@/components/checkout/PaymentPlaceholder";
 import ShippingFields from "@/components/checkout/ShippingFields";
 import { PHYSICAL_BOOK } from "@/lib/commerce/product";
 import type { PublicQuote } from "@/lib/commerce/quote";
@@ -111,31 +109,21 @@ export default function CheckoutForm({ kind, initialQuote }: CheckoutFormProps) 
         ) : null}
       </div>
 
-      <aside className="min-w-0 md:sticky md:top-28 md:col-span-5 md:row-span-2">
+      <aside className="flex min-w-0 flex-col gap-8 md:sticky md:top-28 md:col-span-5">
         <OrderSummary
           quote={quote}
           quantity={quantity}
           quantityEditable={kind === "physical"}
           onQuantityChange={kind === "physical" ? handleQuantityChange : undefined}
           quoting={quoting}
+          ebookBump={ebookBump}
+          onEbookBumpChange={kind === "physical" ? setEbookBump : undefined}
         />
-        {kind === "physical" ? (
-          <EbookBumpOffer
-            checked={ebookBump}
-            onChange={setEbookBump}
-            listPriceCents={quote?.ebookListPriceCents ?? initialQuote?.ebookListPriceCents ?? null}
-            bumpPriceCents={quote?.ebookBumpPriceCents ?? initialQuote?.ebookBumpPriceCents ?? null}
-          />
-        ) : null}
-      </aside>
-
-      <div className="flex min-w-0 flex-col gap-12 md:col-span-7">
-        <PaymentPlaceholder />
         <div>
           <button
             type="submit"
             disabled
-            className="inline-flex min-h-12 w-full items-center justify-center rounded-lg bg-ink px-5 font-sans text-sm font-medium tracking-[0.14em] text-paper-strong uppercase opacity-40 sm:w-auto sm:min-w-[16rem]"
+            className="inline-flex min-h-12 w-full items-center justify-center rounded-lg bg-ink px-5 font-sans text-sm font-medium tracking-[0.14em] text-paper-strong uppercase opacity-40"
           >
             Finalizar compra
           </button>
@@ -143,7 +131,7 @@ export default function CheckoutForm({ kind, initialQuote }: CheckoutFormProps) 
             Pagamento será habilitado na próxima etapa.
           </p>
         </div>
-      </div>
+      </aside>
     </form>
   );
 }

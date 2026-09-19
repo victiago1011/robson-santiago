@@ -20,7 +20,7 @@ export type QuoteProduct = {
 export type CommerceCatalogSnapshot = {
   physical: QuoteProduct;
   digital: QuoteProduct;
-  physicalShippingCents: number;
+  physicalShippingRates: Record<number, number>;
   ebookBumpPriceCents: number;
   currency: "BRL";
 };
@@ -102,14 +102,24 @@ export function toPublicQuote(quote: OrderQuote): PublicQuote {
   };
 }
 
+function shippingCentsForPhysicalQuantity(
+  catalog: CommerceCatalogSnapshot,
+  quantity: number,
+): number {
+  const shippingCents = catalog.physicalShippingRates[quantity];
+  if (shippingCents === undefined || !Number.isInteger(shippingCents) || shippingCents <= 0) {
+    throw new QuoteSelectionError("CATALOG_INCOMPLETE");
+  }
+  return shippingCents;
+}
+
 export function calculateQuoteFromCatalog(
   selection: PurchaseSelection,
   catalog: CommerceCatalogSnapshot,
 ): OrderQuote {
-  assertIntegerCents(catalog.physicalShippingCents, "shipping");
   assertIntegerCents(catalog.ebookBumpPriceCents, "ebook_bump");
 
-  if (catalog.currency !== "BRL" || catalog.physicalShippingCents <= 0 || catalog.ebookBumpPriceCents <= 0) {
+  if (catalog.currency !== "BRL" || catalog.ebookBumpPriceCents <= 0) {
     throw new QuoteSelectionError("CATALOG_INCOMPLETE");
   }
 
@@ -124,6 +134,7 @@ export function calculateQuoteFromCatalog(
   let purchasable: boolean;
   let ebookListPriceCents: number | null = null;
   let ebookBumpPriceCents: number | null = null;
+  let shippingCents = 0;
 
   if (selection.kind === "physical") {
     const { quantity } = selection;
@@ -134,6 +145,7 @@ export function calculateQuoteFromCatalog(
     requirePricedProduct(catalog.digital);
     ebookListPriceCents = catalog.digital.priceCents;
     ebookBumpPriceCents = catalog.ebookBumpPriceCents;
+    shippingCents = shippingCentsForPhysicalQuantity(catalog, quantity);
 
     items = [lineItem(catalog.physical, quantity)];
     purchasable = isProductReady(catalog.physical);
@@ -152,7 +164,6 @@ export function calculateQuoteFromCatalog(
 
   const subtotalCents = items.reduce((sum, item) => sum + item.lineTotalCents, 0);
   const requiresShipping = items.some((item) => item.type === "physical");
-  const shippingCents = requiresShipping ? catalog.physicalShippingCents : 0;
   const shippingMethod = requiresShipping ? "flat_rate" : null;
   const totalCents = subtotalCents - discountCents + shippingCents;
 

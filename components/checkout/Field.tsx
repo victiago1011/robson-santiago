@@ -1,7 +1,7 @@
 import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
 
 const controlClassName =
-  "mt-2 w-full min-h-12 rounded-lg border border-rule bg-paper-strong px-4 font-sans text-base text-ink placeholder:text-ink-soft/55 transition-[border-color,box-shadow] focus-visible:border-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/20 disabled:cursor-not-allowed disabled:opacity-60";
+  "mt-2 w-full min-h-12 rounded-lg border border-rule bg-white px-4 font-sans text-base text-ink placeholder:text-ink-soft/55 transition-[border-color,box-shadow] focus-visible:border-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/20 disabled:cursor-not-allowed disabled:opacity-60";
 
 type FieldShellProps = {
   id: string;

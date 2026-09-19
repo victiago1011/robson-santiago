@@ -73,7 +73,9 @@ export default async function LivroEdicoes() {
     getPublicQuote({ kind: "digital" }),
   ]);
 
-  const shippingLabel = physical ? `+ ${formatBRLFromCents(physical.shippingCents)} de frete` : "+ frete";
+  const shippingLabel = physical
+    ? `Frete a partir de ${formatBRLFromCents(physical.shippingCents)}`
+    : "Frete a consultar";
 
   return (
     <section

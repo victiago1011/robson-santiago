@@ -151,7 +151,7 @@ Fonte de verdade de preço, desconto, frete, subtotal e total: **servidor + banc
 
 Seleção comercial:
 
-- `physical`: 1 × a 5 × `AVIDA-FISICO`, com `ebookBump` opcional;
+- `physical`: 1 × a 4 × `AVIDA-FISICO`, com `ebookBump` opcional;
 - `digital`: 1 × `AVIDA-EBOOK` avulso.
 
 Não existe combo nem terceiro SKU. A página `/livro` oferece só físico e e-book.
@@ -163,7 +163,7 @@ Preços oficiais (centavos inteiros):
 - order bump (1 e-book junto de um pedido físico): preço efetivo `1000` (`R$ 10,00`). O item permanece com preço de lista `1990`; o desconto `990` fica em `orders.discount_cents`.
 - o bump **não** se multiplica pela quantidade de livros físicos: sempre 1 e-book e desconto `990`.
 
-Frete: tabela `commerce_settings.physical_shipping_cents = 1500`, cobrado **uma vez** por pedido que contenha livro físico. Pedido só digital: `shipping_cents = 0` e `shipping_method = NULL`. Pedido físico (com ou sem bump): `shipping_method = flat_rate` e `shipping_cents = 1500`. O preço promocional do bump fica em `commerce_settings.ebook_bump_price_cents = 1000`.
+Frete: tabela `commerce_shipping_rates` com valor por quantidade física (`1 → 1500`, `2 → 2000`, `3 → 2500`, `4 → 3000`). A cotação lê a faixa correspondente no servidor; não usar fórmula no código. Pedido só digital: `shipping_cents = 0` e `shipping_method = NULL`. Pedido físico (com ou sem bump): `shipping_method = flat_rate`. O preço promocional do bump fica em `commerce_settings.ebook_bump_price_cents = 1000`.
 
 A cotação (`calculateOrderQuote` / `POST /api/checkout/quote`) monta os itens reais, calcula subtotal, desconto, frete e total, e devolve `purchasable` conforme `is_active`. Produtos permanecem **inativos** nesta fase (`purchasable = false`).
 

@@ -1,6 +1,7 @@
 "use client";
 
-import { PHYSICAL_BOOK } from "@/lib/commerce/product";
+import EbookBumpOffer from "@/components/checkout/EbookBumpOffer";
+import { DIGITAL_BOOK, PHYSICAL_BOOK } from "@/lib/commerce/product";
 import { formatBRLFromCents } from "@/lib/commerce/money";
 import type { PublicQuote } from "@/lib/commerce/quote";
 
@@ -10,7 +11,20 @@ type OrderSummaryProps = {
   quantityEditable: boolean;
   onQuantityChange?: (quantity: number) => void;
   quoting?: boolean;
+  ebookBump?: boolean;
+  onEbookBumpChange?: (checked: boolean) => void;
 };
+
+function shippingLabel(physicalQuantity: number | undefined): string {
+  if (physicalQuantity === 1) {
+    return "Frete (1 livro)";
+  }
+  if (physicalQuantity && physicalQuantity > 1) {
+    return `Frete (${physicalQuantity} livros)`;
+  }
+
+  return "Frete";
+}
 
 export default function OrderSummary({
   quote,
@@ -18,10 +32,18 @@ export default function OrderSummary({
   quantityEditable,
   onQuantityChange,
   quoting = false,
+  ebookBump = false,
+  onEbookBumpChange,
 }: OrderSummaryProps) {
   const decreaseDisabled = quantity <= PHYSICAL_BOOK.minQuantity;
   const increaseDisabled = quantity >= PHYSICAL_BOOK.maxQuantity;
   const showDiscount = (quote?.discountCents ?? 0) > 0;
+  const physicalItem = quote?.items.find((item) => item.type === "physical");
+  const digitalItem = quote?.items.find((item) => item.type === "digital");
+  const showPhysical = Boolean(physicalItem) || quantityEditable;
+  const showBump = quantityEditable && onEbookBumpChange;
+  const showDigitalAsBump = ebookBump && showPhysical;
+  const showDigitalAsProduct = Boolean(digitalItem && !physicalItem);
 
   return (
     <section
@@ -32,64 +54,95 @@ export default function OrderSummary({
         Seu pedido
       </h2>
 
-      <div className="mt-6 border-b border-rule pb-6">
-        {quote ? (
-          <ul className="space-y-4">
-            {quote.items.map((item) => (
-              <li key={item.sku} className="flex items-baseline justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="font-sans text-base text-ink">{item.title}</p>
-                  {item.quantity > 1 ? (
-                    <p className="mt-1 font-display text-base text-ink-soft italic">
-                      {item.quantity} × {formatBRLFromCents(item.unitPriceCents)}
+      <div className="mt-6">
+        {quote || showPhysical ? (
+          <ul className="space-y-5">
+            {showPhysical ? (
+              <li>
+                <p id="physical-qty-label" className="font-sans text-base text-ink">
+                  {physicalItem?.title ?? PHYSICAL_BOOK.title} — {PHYSICAL_BOOK.format}
+                </p>
+                <div className="mt-3 flex items-center justify-between gap-4">
+                  {quantityEditable && onQuantityChange ? (
+                    <div className="inline-flex items-center rounded-lg border border-rule">
+                      <button
+                        type="button"
+                        onClick={() => onQuantityChange(quantity - 1)}
+                        disabled={decreaseDisabled}
+                        aria-label="Diminuir quantidade de livros físicos"
+                        className="inline-flex min-h-11 min-w-11 items-center justify-center font-sans text-lg text-ink disabled:cursor-not-allowed disabled:opacity-30"
+                      >
+                        −
+                      </button>
+                      <span
+                        aria-live="polite"
+                        aria-labelledby="physical-qty-label"
+                        className="min-w-8 text-center font-sans text-base tabular-nums text-ink"
+                      >
+                        {quantity}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => onQuantityChange(quantity + 1)}
+                        disabled={increaseDisabled}
+                        aria-label="Aumentar quantidade de livros físicos"
+                        className="inline-flex min-h-11 min-w-11 items-center justify-center font-sans text-lg text-ink disabled:cursor-not-allowed disabled:opacity-30"
+                      >
+                        +
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="font-sans text-sm text-ink-soft">
+                      {quantity} {quantity === 1 ? "unidade" : "unidades"}
                     </p>
-                  ) : null}
+                  )}
+                  <p className="shrink-0 font-display text-base italic text-ink">
+                    {physicalItem ? formatBRLFromCents(physicalItem.lineTotalCents) : "—"}
+                  </p>
                 </div>
+              </li>
+            ) : null}
+
+            {showDigitalAsProduct && digitalItem ? (
+              <li className="flex items-baseline justify-between gap-4">
+                <p className="font-sans text-base text-ink">{digitalItem.title}</p>
                 <p className="shrink-0 font-display text-base italic text-ink">
-                  {formatBRLFromCents(item.lineTotalCents)}
+                  {formatBRLFromCents(digitalItem.lineTotalCents)}
                 </p>
               </li>
-            ))}
+            ) : null}
           </ul>
         ) : (
           <p className="font-display text-base text-ink-soft italic">Resumo indisponível no momento.</p>
         )}
       </div>
 
-      {quantityEditable && onQuantityChange ? (
-        <div className="flex items-center justify-between gap-4 py-6">
-          <p className="font-sans text-[0.7rem] font-medium tracking-[0.18em] text-ink uppercase">
-            Quantidade
-          </p>
-          <div className="inline-flex items-center rounded-lg border border-rule">
-            <button
-              type="button"
-              onClick={() => onQuantityChange(quantity - 1)}
-              disabled={decreaseDisabled}
-              aria-label="Diminuir quantidade"
-              className="inline-flex min-h-11 min-w-11 items-center justify-center font-sans text-lg text-ink disabled:cursor-not-allowed disabled:opacity-30"
-            >
-              −
-            </button>
-            <span aria-live="polite" className="min-w-8 text-center font-sans text-base tabular-nums text-ink">
-              {quantity}
-            </span>
-            <button
-              type="button"
-              onClick={() => onQuantityChange(quantity + 1)}
-              disabled={increaseDisabled}
-              aria-label="Aumentar quantidade"
-              className="inline-flex min-h-11 min-w-11 items-center justify-center font-sans text-lg text-ink disabled:cursor-not-allowed disabled:opacity-30"
-            >
-              +
-            </button>
-          </div>
+      {showBump ? (
+        <div className="mt-2 border-t border-rule">
+          <EbookBumpOffer
+            checked={ebookBump}
+            onChange={onEbookBumpChange}
+            listPriceCents={quote?.ebookListPriceCents ?? null}
+            bumpPriceCents={quote?.ebookBumpPriceCents ?? null}
+          />
         </div>
-      ) : (
-        <p className="py-6 font-sans text-sm text-ink-soft">Quantidade: {quantity}</p>
-      )}
+      ) : null}
 
-      <dl className={`space-y-3 border-t border-rule pt-6 font-sans text-sm text-ink ${quoting ? "opacity-70" : ""}`}>
+      {showDigitalAsBump ? (
+        <div className="flex items-baseline justify-between gap-4 border-t border-rule py-6">
+          <div className="min-w-0">
+            <p className="font-sans text-base text-ink">{digitalItem?.title ?? DIGITAL_BOOK.title}</p>
+            <p className="mt-1 font-sans text-sm text-ink-soft">Order bump · 1 unidade</p>
+          </div>
+          <p className="shrink-0 font-display text-base italic text-ink">
+            {digitalItem ? formatBRLFromCents(digitalItem.lineTotalCents) : "—"}
+          </p>
+        </div>
+      ) : null}
+
+      <dl
+        className={`space-y-3 border-t border-rule pt-6 font-sans text-sm text-ink ${quoting ? "opacity-70" : ""}`}
+      >
         <div className="flex items-baseline justify-between gap-4">
           <dt className="text-ink-soft">Subtotal</dt>
           <dd className="font-display text-base italic text-ink">
@@ -105,7 +158,13 @@ export default function OrderSummary({
           </div>
         ) : null}
         <div className="flex items-baseline justify-between gap-4">
-          <dt className="text-ink-soft">Frete</dt>
+          <dt className="text-ink-soft">
+            {quote && quote.shippingCents > 0
+              ? shippingLabel(physicalItem?.quantity)
+              : quantityEditable
+                ? shippingLabel(quantity)
+                : "Frete"}
+          </dt>
           <dd className="font-display text-base italic text-ink">
             {quote
               ? quote.shippingCents === 0

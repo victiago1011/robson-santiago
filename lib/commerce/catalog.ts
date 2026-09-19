@@ -18,8 +18,13 @@ type ProductRow = {
 };
 
 type SettingsRow = {
-  physical_shipping_cents: number;
   ebook_bump_price_cents: number;
+  currency: string;
+};
+
+type ShippingRateRow = {
+  physical_quantity: number;
+  shipping_cents: number;
   currency: string;
 };
 
@@ -65,42 +70,51 @@ export async function loadCommerceCatalog(): Promise<CommerceCatalogSnapshot> {
 
   const supabase = getSupabase();
 
-  const [productsResult, settingsResult] = await Promise.all([
+  const [productsResult, settingsResult, ratesResult] = await Promise.all([
     supabase
       .from("products")
       .select("id, sku, title, type, isbn, price_cents, currency, is_active")
       .in("sku", [PHYSICAL_SKU, DIGITAL_SKU]),
     supabase
       .from("commerce_settings")
-      .select("physical_shipping_cents, ebook_bump_price_cents, currency")
+      .select("ebook_bump_price_cents, currency")
       .eq("id", 1)
       .maybeSingle(),
+    supabase
+      .from("commerce_shipping_rates")
+      .select("physical_quantity, shipping_cents, currency"),
   ]);
 
   if (productsResult.error) throw productsResult.error;
   if (settingsResult.error) throw settingsResult.error;
+  if (ratesResult.error) throw ratesResult.error;
 
   const products = (productsResult.data ?? []) as ProductRow[];
   const physical = products.find((row) => row.sku === PHYSICAL_SKU);
   const digital = products.find((row) => row.sku === DIGITAL_SKU);
   const settings = settingsResult.data as SettingsRow | null;
+  const rates = (ratesResult.data ?? []) as ShippingRateRow[];
 
-  if (!physical || !digital || !settings) {
+  if (!physical || !digital || !settings || rates.length === 0) {
     throw new Error("CATALOG_INCOMPLETE");
   }
 
-  if (
-    settings.currency !== "BRL" ||
-    settings.physical_shipping_cents <= 0 ||
-    settings.ebook_bump_price_cents <= 0
-  ) {
+  if (settings.currency !== "BRL" || settings.ebook_bump_price_cents <= 0) {
     throw new Error("CATALOG_INCOMPLETE");
+  }
+
+  const physicalShippingRates: Record<number, number> = {};
+  for (const rate of rates) {
+    if (rate.currency !== "BRL" || rate.shipping_cents <= 0) {
+      throw new Error("CATALOG_INCOMPLETE");
+    }
+    physicalShippingRates[rate.physical_quantity] = rate.shipping_cents;
   }
 
   return {
     physical: mapProduct(physical),
     digital: mapProduct(digital),
-    physicalShippingCents: settings.physical_shipping_cents,
+    physicalShippingRates,
     ebookBumpPriceCents: settings.ebook_bump_price_cents,
     currency: "BRL",
   };

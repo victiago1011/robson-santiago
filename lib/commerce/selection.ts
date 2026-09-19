@@ -4,7 +4,7 @@ export const EBOOK_BUMP_PROMOTION_CODE = "AVIDA-EBOOK-BUMP";
 
 export const PHYSICAL_QUANTITY = {
   min: 1,
-  max: 5,
+  max: 4,
 } as const;
 
 export const CHECKOUT_OPTION_QUERY = {

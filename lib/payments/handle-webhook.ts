@@ -1,5 +1,9 @@
 import { getMercadoPagoWebhookSecret } from "@/lib/payments/config";
 import {
+  classifyGetOrderError,
+  providerUnavailableLog,
+} from "@/lib/payments/provider-order-error";
+import {
   decideReconciliation,
   persistReconciliation,
   technicalMetadata,
@@ -25,14 +29,6 @@ export type WebhookDependencies = {
   store: WebhookPaymentStore;
   now?: () => number;
 };
-
-function providerHttpStatus(error: unknown): number | null {
-  if (typeof error === "object" && error !== null && "status" in error) {
-    const status = Number((error as { status?: unknown }).status);
-    return Number.isFinite(status) ? status : null;
-  }
-  return null;
-}
 
 export async function handleMercadoPagoWebhook(
   request: Request,
@@ -79,11 +75,14 @@ export async function handleMercadoPagoWebhook(
     const gateway = deps.getMercadoPago();
     providerOrder = await gateway.getOrder(dataId);
   } catch (error) {
-    const status = providerHttpStatus(error);
-    if (status === 404) {
+    const classified = classifyGetOrderError(error);
+    if (classified === "not_found") {
       return { ok: true, code: "PROVIDER_ORDER_NOT_FOUND", status: 200, dataId };
     }
-    console.error("webhook_provider_unavailable", { code: "PROVIDER_UNAVAILABLE" });
+    if (classified === "invalid_id") {
+      return { ok: true, code: "INVALID_PROVIDER_ORDER_ID", status: 200, dataId };
+    }
+    console.error("webhook_provider_unavailable", providerUnavailableLog(error));
     return { ok: false, code: "PROVIDER_UNAVAILABLE", status: 503, dataId };
   }
 

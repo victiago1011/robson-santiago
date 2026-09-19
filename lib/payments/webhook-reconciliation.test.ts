@@ -3,6 +3,7 @@ import { createHmac } from "node:crypto";
 import { test } from "node:test";
 import { decimalAmountToCents } from "@/lib/payments/amount";
 import { handleMercadoPagoWebhook } from "@/lib/payments/handle-webhook";
+import { classifyGetOrderError } from "@/lib/payments/provider-order-error";
 import {
   checkFinancialMatch,
   decideReconciliation,
@@ -17,6 +18,7 @@ import {
   mapProviderStatus,
 } from "@/lib/payments/status";
 import type { MercadoPagoOrder } from "@/lib/payments/types";
+import { buildError, MPConnectionError } from "mercadopago";
 import {
   buildWebhookManifest,
   extractWebhookQueryDataId,
@@ -362,7 +364,7 @@ test("data.id da query é extraído mesmo se o body for diferente", () => {
 test("Order fictícia 404 não corrompe o banco", async () => {
   const getCalls = { count: 0, ids: [] as string[] };
   const { store, events, order } = mockStore();
-  const error = Object.assign(new Error("not found"), { status: 404 });
+  const error = buildError(404, { error: "order_not_found", message: "Order not found" });
   const result = await handleMercadoPagoWebhook(
     signedRequest({ dataId: "123456" }),
     { MERCADO_PAGO_WEBHOOK_SECRET: SECRET },
@@ -615,4 +617,102 @@ test("erro temporário do provedor retorna 503 para retry", async () => {
   );
   assert.equal(result.status, 503);
   assert.equal(result.code, "PROVIDER_UNAVAILABLE");
+});
+
+async function handleThrownProviderError(error: unknown, dataId = "123456") {
+  const getCalls = { count: 0, ids: [] as string[] };
+  const { store, events, order, payments } = mockStore();
+  const fulfillment = order?.fulfillmentStatus;
+  const paymentStatus = order?.paymentStatus;
+  const paymentSnapshot = payments.map((row) => ({ ...row }));
+  const result = await handleMercadoPagoWebhook(
+    signedRequest({ dataId }),
+    { MERCADO_PAGO_WEBHOOK_SECRET: SECRET },
+    {
+      now: () => NOW,
+      getMercadoPago: () => ({
+        createOrder: async () => {
+          throw new Error("unused");
+        },
+        getOrder: async (id) => {
+          getCalls.count += 1;
+          getCalls.ids.push(id);
+          throw error;
+        },
+      }),
+      store,
+    },
+  );
+  return { result, getCalls, store, events, order, payments, fulfillment, paymentStatus, paymentSnapshot };
+}
+
+test("400 invalid_path_param autentica sem alterar banco", async () => {
+  const error = buildError(400, {
+    error: "invalid_path_param",
+    message: "Path param Order id is invalid",
+  });
+  assert.equal(classifyGetOrderError(error), "invalid_id");
+  const { result, getCalls, events, order, payments, fulfillment, paymentStatus, paymentSnapshot } =
+    await handleThrownProviderError(error, "123456");
+  assert.equal(result.code, "INVALID_PROVIDER_ORDER_ID");
+  assert.equal(result.status, 200);
+  assert.equal(result.ok, true);
+  assert.equal(getCalls.count, 1);
+  assert.deepEqual(getCalls.ids, ["123456"]);
+  assert.equal(events.length, 0);
+  assert.equal(order?.paymentStatus, paymentStatus);
+  assert.equal(order?.fulfillmentStatus, fulfillment);
+  assert.deepEqual(payments, paymentSnapshot);
+});
+
+test("400 por outro motivo não vira 200", async () => {
+  const error = buildError(400, {
+    error: "json_syntax_error",
+    message: "An incorrect JSON was sent",
+  });
+  assert.equal(classifyGetOrderError(error), "unavailable");
+  const { result, events, order } = await handleThrownProviderError(error);
+  assert.equal(result.code, "PROVIDER_UNAVAILABLE");
+  assert.equal(result.status, 503);
+  assert.equal(events.length, 0);
+  assert.equal(order?.paymentStatus, "pending");
+});
+
+test("401 da Orders API permanece 503", async () => {
+  const error = buildError(401, { error: "unauthorized", message: "invalid credentials" });
+  const { result } = await handleThrownProviderError(error);
+  assert.equal(result.code, "PROVIDER_UNAVAILABLE");
+  assert.equal(result.status, 503);
+});
+
+test("403 da Orders API permanece 503", async () => {
+  const error = buildError(403, { error: "forbidden", message: "forbidden" });
+  const { result } = await handleThrownProviderError(error);
+  assert.equal(result.code, "PROVIDER_UNAVAILABLE");
+  assert.equal(result.status, 503);
+});
+
+test("429 da Orders API permanece 503", async () => {
+  const error = buildError(429, { error: "too_many_requests", message: "rate limited" });
+  const { result } = await handleThrownProviderError(error);
+  assert.equal(result.code, "PROVIDER_UNAVAILABLE");
+  assert.equal(result.status, 503);
+});
+
+test("erro de conexão com status 0 permanece 503", async () => {
+  const error = new MPConnectionError(new Error("aborted"));
+  assert.equal(classifyGetOrderError(error), "unavailable");
+  const { result } = await handleThrownProviderError(error);
+  assert.equal(result.code, "PROVIDER_UNAVAILABLE");
+  assert.equal(result.status, 503);
+});
+
+test("erro desconhecido permanece conservador", async () => {
+  const { result, getCalls, events, order } = await handleThrownProviderError(new Error("unexpected"));
+  assert.equal(result.code, "PROVIDER_UNAVAILABLE");
+  assert.equal(result.status, 503);
+  assert.equal(getCalls.count, 1);
+  assert.equal(events.length, 0);
+  assert.equal(order?.paymentStatus, "pending");
+  assert.equal(order?.fulfillmentStatus, "pending");
 });

@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { calculateQuoteFromCatalog, type CommerceCatalogSnapshot } from "@/lib/commerce/quote";
 import { checkoutPaySchema } from "@/lib/payments/schemas";
-import { getMercadoPagoAccessToken, MercadoPagoNotConfiguredError } from "@/lib/payments/config";
+import {
+  getMercadoPagoAccessToken,
+  isMercadoPagoTestAccessToken,
+  MercadoPagoNotConfiguredError,
+  resolveOrderPayerFirstName,
+} from "@/lib/payments/config";
 import { decidePaymentAttemptAction } from "@/lib/payments/idempotency";
 import { startCheckoutPayment, type CheckoutPaymentDependencies } from "@/lib/payments/start-checkout-payment";
 import { handleMercadoPagoWebhook } from "@/lib/payments/handle-webhook";
@@ -269,6 +274,43 @@ test("ausência do Access Token falha de forma segura", () => {
   assert.throws(
     () => getMercadoPagoAccessToken({}),
     (error: unknown) => error instanceof MercadoPagoNotConfiguredError,
+  );
+});
+
+test("somente Access Token TEST- é tratado como credencial de teste", () => {
+  assert.equal(isMercadoPagoTestAccessToken("TEST-abc"), true);
+  assert.equal(isMercadoPagoTestAccessToken("  TEST-abc  "), true);
+  assert.equal(isMercadoPagoTestAccessToken("APP_USR-abc"), false);
+  assert.equal(isMercadoPagoTestAccessToken(""), false);
+  assert.equal(isMercadoPagoTestAccessToken(undefined), false);
+  assert.equal(isMercadoPagoTestAccessToken("PROD-abc"), false);
+});
+
+test("Pix com token TEST envia first_name APRO; demais casos preservam o nome real", () => {
+  const realName = "Maria";
+  assert.equal(
+    resolveOrderPayerFirstName({
+      method: "pix",
+      firstName: realName,
+      accessToken: "TEST-abc",
+    }),
+    "APRO",
+  );
+  assert.equal(
+    resolveOrderPayerFirstName({
+      method: "pix",
+      firstName: realName,
+      accessToken: "APP_USR-abc",
+    }),
+    realName,
+  );
+  assert.equal(
+    resolveOrderPayerFirstName({
+      method: "credit_card",
+      firstName: realName,
+      accessToken: "TEST-abc",
+    }),
+    realName,
   );
 });
 

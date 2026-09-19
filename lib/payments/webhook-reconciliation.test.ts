@@ -19,8 +19,9 @@ import {
 import type { MercadoPagoOrder } from "@/lib/payments/types";
 import {
   buildWebhookManifest,
-  extractWebhookDataId,
+  extractWebhookQueryDataId,
   isWebhookTimestampFresh,
+  normalizeWebhookDataId,
   verifyMercadoPagoSignature,
   WEBHOOK_SIGNATURE_MAX_AGE_MS,
 } from "@/lib/payments/webhook-signature";
@@ -39,6 +40,8 @@ function sign(dataId: string, requestId: string, ts: string) {
 
 function signedRequest(options?: {
   dataId?: string | number;
+  bodyDataId?: string | number;
+  signDataId?: string;
   requestId?: string | null;
   ts?: string;
   signature?: string;
@@ -46,9 +49,11 @@ function signedRequest(options?: {
 }) {
   const dataId = options?.dataId ?? PROVIDER_ORDER_ID;
   const dataIdText = String(dataId);
+  const bodyDataId = options?.bodyDataId ?? dataId;
+  const signDataId = options?.signDataId ?? dataIdText;
   const requestId = options?.requestId === null ? null : (options?.requestId ?? "req-1");
   const ts = options?.ts ?? String(Math.floor(NOW / 1000));
-  const v1 = options?.signature ?? sign(dataIdText, requestId ?? "", ts);
+  const v1 = options?.signature ?? sign(signDataId, requestId ?? "", ts);
   const url = options?.query === false
     ? "https://www.robsonsantiago.com.br/api/webhooks/mercado-pago"
     : `https://www.robsonsantiago.com.br/api/webhooks/mercado-pago?data.id=${encodeURIComponent(dataIdText)}`;
@@ -61,7 +66,7 @@ function signedRequest(options?: {
   return new Request(url, {
     method: "POST",
     headers,
-    body: JSON.stringify({ type: "order", data: { id: dataId } }),
+    body: JSON.stringify({ type: "order", action: "order.processed", data: { id: bodyDataId } }),
   });
 }
 
@@ -157,9 +162,9 @@ function mockStore(seed?: {
 
 async function handle(
   request: Request,
-  getOrder: () => Promise<MercadoPagoOrder>,
+  getOrder: (id: string) => Promise<MercadoPagoOrder>,
   store: WebhookPaymentStore,
-  getCalls: { count: number },
+  getCalls: { count: number; ids: string[] },
 ) {
   return handleMercadoPagoWebhook(
     request,
@@ -170,9 +175,10 @@ async function handle(
         createOrder: async () => {
           throw new Error("createOrder should not run");
         },
-        getOrder: async () => {
+        getOrder: async (id) => {
           getCalls.count += 1;
-          return getOrder();
+          getCalls.ids.push(id);
+          return getOrder(id);
         },
       }),
       store,
@@ -202,7 +208,7 @@ test("assinatura ausente não processa", async () => {
       body: JSON.stringify({ data: { id: PROVIDER_ORDER_ID } }),
     },
   );
-  const getCalls = { count: 0 };
+  const getCalls = { count: 0, ids: [] as string[] };
   const { store } = mockStore();
   const result = await handle(request, async () => mpOrder(), store, getCalls);
   assert.equal(result.code, "INVALID_SIGNATURE");
@@ -211,7 +217,7 @@ test("assinatura ausente não processa", async () => {
 });
 
 test("assinatura inválida não chama Mercado Pago", async () => {
-  const getCalls = { count: 0 };
+  const getCalls = { count: 0, ids: [] as string[] };
   const { store, events } = mockStore();
   const result = await handle(
     signedRequest({ signature: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef" }),
@@ -240,7 +246,7 @@ test("HMAC válido e timestamp dentro da tolerância", () => {
 
 test("timestamp expirado é rejeitado como replay", async () => {
   const oldTs = String(Math.floor((NOW - WEBHOOK_SIGNATURE_MAX_AGE_MS - 1000) / 1000));
-  const getCalls = { count: 0 };
+  const getCalls = { count: 0, ids: [] as string[] };
   const { store, events } = mockStore();
   const result = await handle(
     signedRequest({ ts: oldTs }),
@@ -258,27 +264,103 @@ test("timestamp em milissegundos dentro da tolerância é aceito", () => {
   assert.equal(isWebhookTimestampFresh(String(NOW + 30_000), NOW), true);
 });
 
-test("assinatura válida chama GET Order", async () => {
-  const getCalls = { count: 0 };
+test("assinatura válida chama GET Order com o data.id da query", async () => {
+  const getCalls = { count: 0, ids: [] as string[] };
   const { store } = mockStore();
   const result = await handle(signedRequest(), async () => mpOrder(), store, getCalls);
   assert.equal(result.code, "RECONCILED");
   assert.equal(result.status, 200);
   assert.equal(getCalls.count, 1);
+  assert.deepEqual(getCalls.ids, [PROVIDER_ORDER_ID]);
 });
 
-test("data.id numérico da simulação é extraído", () => {
+test("HMAC usa data.id da query, não o id do body", async () => {
+  const getCalls = { count: 0, ids: [] as string[] };
+  const { store } = mockStore();
+  const result = await handle(
+    signedRequest({ bodyDataId: "BODY-OTHER-ID" }),
+    async () => mpOrder(),
+    store,
+    getCalls,
+  );
+  assert.equal(result.code, "RECONCILED");
+  assert.equal(getCalls.count, 1);
+  assert.deepEqual(getCalls.ids, [PROVIDER_ORDER_ID]);
+});
+
+test("query data.id ausente é rejeitada sem consultar Mercado Pago", async () => {
+  const getCalls = { count: 0, ids: [] as string[] };
+  const { store, events } = mockStore();
+  const result = await handle(
+    signedRequest({ query: false, bodyDataId: "123456", signDataId: "123456" }),
+    async () => mpOrder(),
+    store,
+    getCalls,
+  );
+  assert.equal(result.code, "MISSING_DATA_ID");
+  assert.equal(result.status, 400);
+  assert.equal(getCalls.count, 0);
+  assert.equal(events.length, 0);
+});
+
+test("assinatura gerada com id do body divergente é rejeitada", async () => {
+  const getCalls = { count: 0, ids: [] as string[] };
+  const { store, events } = mockStore();
+  const result = await handle(
+    signedRequest({ bodyDataId: "BODY-OTHER-ID", signDataId: "BODY-OTHER-ID" }),
+    async () => mpOrder(),
+    store,
+    getCalls,
+  );
+  assert.equal(result.code, "INVALID_SIGNATURE");
+  assert.equal(result.status, 401);
+  assert.equal(getCalls.count, 0);
+  assert.equal(events.length, 0);
+});
+
+test("data.id alfanumérico maiúsculo entra em lowercase no manifesto", async () => {
+  const ts = String(Math.floor(NOW / 1000));
+  const queryId = "ORD01JQ4S4KY8HWQ6NA5PXB65B3D3";
+  assert.equal(normalizeWebhookDataId(queryId), "ord01jq4s4ky8hwq6na5pxb65b3d3");
   assert.equal(
-    extractWebhookDataId({
-      searchParams: new URLSearchParams(),
-      body: { data: { id: 123456 } },
+    buildWebhookManifest({ dataId: queryId, requestId: "req-1", ts }),
+    `id:ord01jq4s4ky8hwq6na5pxb65b3d3;request-id:req-1;ts:${ts};`,
+  );
+  assert.equal(
+    verifyMercadoPagoSignature({
+      secret: SECRET,
+      signatureHeader: `ts=${ts},v1=${sign(queryId, "req-1", ts)}`,
+      requestId: "req-1",
+      dataId: queryId,
     }),
+    true,
+  );
+  assert.equal(
+    extractWebhookQueryDataId(new URLSearchParams(`data.id=${queryId}`)),
+    queryId,
+  );
+
+  const getCalls = { count: 0, ids: [] as string[] };
+  const { store } = mockStore();
+  const result = await handle(
+    signedRequest({ dataId: queryId }),
+    async () => mpOrder({ id: queryId, external_reference: "missing-local" }),
+    store,
+    getCalls,
+  );
+  assert.equal(result.status, 200);
+  assert.deepEqual(getCalls.ids, [queryId]);
+});
+
+test("data.id da query é extraído mesmo se o body for diferente", () => {
+  assert.equal(
+    extractWebhookQueryDataId(new URLSearchParams("data.id=123456&type=order")),
     "123456",
   );
 });
 
 test("Order fictícia 404 não corrompe o banco", async () => {
-  const getCalls = { count: 0 };
+  const getCalls = { count: 0, ids: [] as string[] };
   const { store, events, order } = mockStore();
   const error = Object.assign(new Error("not found"), { status: 404 });
   const result = await handleMercadoPagoWebhook(
@@ -290,8 +372,9 @@ test("Order fictícia 404 não corrompe o banco", async () => {
         createOrder: async () => {
           throw new Error("unused");
         },
-        getOrder: async () => {
+        getOrder: async (id) => {
           getCalls.count += 1;
+          getCalls.ids.push(id);
           throw error;
         },
       }),
@@ -301,6 +384,7 @@ test("Order fictícia 404 não corrompe o banco", async () => {
   assert.equal(result.code, "PROVIDER_ORDER_NOT_FOUND");
   assert.equal(result.status, 200);
   assert.equal(getCalls.count, 1);
+  assert.deepEqual(getCalls.ids, ["123456"]);
   assert.equal(events.length, 0);
   assert.equal(order?.paymentStatus, "pending");
   assert.equal(order?.fulfillmentStatus, "pending");
@@ -308,7 +392,7 @@ test("Order fictícia 404 não corrompe o banco", async () => {
 
 test("external_reference inexistente não cria pedido", async () => {
   const { store, events } = mockStore({ order: null, payments: [] });
-  const result = await handle(signedRequest(), async () => mpOrder(), store, { count: 0 });
+  const result = await handle(signedRequest(), async () => mpOrder(), store, { count: 0, ids: [] });
   assert.equal(result.code, "PAYMENT_ORDER_NOT_FOUND");
   assert.equal(events.length, 0);
 });
@@ -317,7 +401,7 @@ test("pedido correto é localizado e aprovado", async () => {
   const { store, order, payments, events, fulfillmentSnapshots } = mockStore({
     payments: [localPayment({ providerOrderId: null })],
   });
-  const result = await handle(signedRequest(), async () => mpOrder(), store, { count: 0 });
+  const result = await handle(signedRequest(), async () => mpOrder(), store, { count: 0, ids: [] });
   assert.equal(result.code, "RECONCILED");
   assert.equal(order?.paymentStatus, "approved");
   assert.equal(order?.fulfillmentStatus, "pending");
@@ -342,7 +426,7 @@ test("provider_order_id incompatível não aprova", async () => {
   const { store, order, events } = mockStore({
     payments: [localPayment({ providerOrderId: "ORD-OTHER" })],
   });
-  const result = await handle(signedRequest(), async () => mpOrder(), store, { count: 0 });
+  const result = await handle(signedRequest(), async () => mpOrder(), store, { count: 0, ids: [] });
   assert.equal(result.code, "PROVIDER_ORDER_MISMATCH");
   assert.equal(order?.paymentStatus, "pending");
   assert.equal(events.some((event) => event.type === "payment_reconciliation_failed"), true);
@@ -355,7 +439,7 @@ test("tentativa ambígua não aprova", async () => {
       localPayment({ id: "p2", providerOrderId: null }),
     ],
   });
-  const result = await handle(signedRequest(), async () => mpOrder(), store, { count: 0 });
+  const result = await handle(signedRequest(), async () => mpOrder(), store, { count: 0, ids: [] });
   assert.equal(result.code, "PAYMENT_ATTEMPT_AMBIGUOUS");
   assert.equal(order?.paymentStatus, "pending");
 });
@@ -371,7 +455,7 @@ test("valor divergente nunca aprova", async () => {
     signedRequest(),
     async () => mpOrder({ total_amount: "10.00", total_paid_amount: "10.00" }),
     store,
-    { count: 0 },
+    { count: 0, ids: [] },
   );
   assert.equal(result.code, "PAYMENT_AMOUNT_MISMATCH");
   assert.equal(order?.paymentStatus, "pending");
@@ -384,7 +468,7 @@ test("moeda diferente de BRL nunca aprova", async () => {
     signedRequest(),
     async () => mpOrder({ currency: "ARS" }),
     store,
-    { count: 0 },
+    { count: 0, ids: [] },
   );
   assert.equal(result.code, "PAYMENT_CURRENCY_MISMATCH");
   assert.equal(order?.paymentStatus, "pending");
@@ -407,7 +491,7 @@ test("approved não volta para pending", async () => {
         transactions: { payments: [{ id: "PAY01ABC", status: "action_required" }] },
       }),
     store,
-    { count: 0 },
+    { count: 0, ids: [] },
   );
   assert.equal(result.code, "RECONCILED");
   assert.equal(order?.paymentStatus, "approved");
@@ -426,7 +510,7 @@ test("approved pode ir para refunded", async () => {
         transactions: { payments: [{ id: "PAY01ABC", status: "refunded", status_detail: "refunded" }] },
       }),
     store,
-    { count: 0 },
+    { count: 0, ids: [] },
   );
   assert.equal(result.code, "RECONCILED");
   assert.equal(order?.paymentStatus, "refunded");
@@ -439,9 +523,9 @@ test("duplicata mantém resultado e não regrava efeitos", async () => {
     order: localOrder({ paymentStatus: "approved" }),
     payments: [localPayment({ status: "approved" })],
   });
-  const first = await handle(signedRequest(), async () => mpOrder(), store, { count: 0 });
+  const first = await handle(signedRequest(), async () => mpOrder(), store, { count: 0, ids: [] });
   const eventCount = events.length;
-  const second = await handle(signedRequest(), async () => mpOrder(), store, { count: 0 });
+  const second = await handle(signedRequest(), async () => mpOrder(), store, { count: 0, ids: [] });
   assert.equal(first.code, "RECONCILED");
   assert.equal(second.code, "RECONCILED");
   assert.equal(events.length, eventCount);
@@ -457,7 +541,7 @@ test("status desconhecido não aprova", async () => {
         transactions: { payments: [{ id: "PAY01ABC", status: "totally_unknown" }] },
       }),
     store,
-    { count: 0 },
+    { count: 0, ids: [] },
   );
   assert.equal(result.code, "PROVIDER_STATUS_UNKNOWN");
   assert.equal(order?.paymentStatus, "pending");
@@ -466,7 +550,7 @@ test("status desconhecido não aprova", async () => {
 
 test("webhook não altera fulfillment nem libera e-book", async () => {
   const { store, order, events } = mockStore();
-  await handle(signedRequest(), async () => mpOrder(), store, { count: 0 });
+  await handle(signedRequest(), async () => mpOrder(), store, { count: 0, ids: [] });
   assert.equal(order?.fulfillmentStatus, "pending");
   assert.equal(
     events.some((event) => String(event.type).includes("ebook") || String(event.type).includes("fulfill")),
@@ -476,10 +560,12 @@ test("webhook não altera fulfillment nem libera e-book", async () => {
 
 test("resposta pública não contém dados sensíveis", async () => {
   const { store } = mockStore();
-  const result = await handle(signedRequest(), async () => mpOrder(), store, { count: 0 });
+  const result = await handle(signedRequest(), async () => mpOrder(), store, { count: 0, ids: [] });
   const serialized = JSON.stringify(result);
   assert.equal(serialized.includes("maria@"), false);
   assert.equal(serialized.includes(SECRET), false);
+  assert.equal(serialized.includes("x-signature"), false);
+  assert.equal(serialized.toLowerCase().includes("v1="), false);
   assert.doesNotThrow(() => assertNoSensitiveFields(result));
 });
 

@@ -30,33 +30,12 @@ export function normalizeWebhookDataId(dataId: string): string {
   return dataId.trim().toLowerCase();
 }
 
-export function extractWebhookDataId(input: {
-  searchParams: URLSearchParams;
-  body: unknown;
-}): string | null {
-  const fromQuery = input.searchParams.get("data.id") ?? input.searchParams.get("id");
-  if (fromQuery?.trim()) {
-    return fromQuery.trim();
+export function extractWebhookQueryDataId(searchParams: URLSearchParams): string | null {
+  const fromQuery = searchParams.get("data.id");
+  if (!fromQuery?.trim()) {
+    return null;
   }
-
-  if (
-    typeof input.body === "object" &&
-    input.body !== null &&
-    "data" in input.body &&
-    typeof input.body.data === "object" &&
-    input.body.data !== null &&
-    "id" in input.body.data
-  ) {
-    const rawId = input.body.data.id;
-    if (typeof rawId === "string" && rawId.trim()) {
-      return rawId.trim();
-    }
-    if (typeof rawId === "number" && Number.isFinite(rawId)) {
-      return String(rawId);
-    }
-  }
-
-  return null;
+  return fromQuery.trim();
 }
 
 export function buildWebhookManifest(input: {

@@ -7,7 +7,7 @@ import {
 } from "@/lib/payments/reconcile-order";
 import type { MercadoPagoOrdersGateway } from "@/lib/payments/types";
 import {
-  extractWebhookDataId,
+  extractWebhookQueryDataId,
   isWebhookTimestampFresh,
   parseSignatureHeader,
   verifyMercadoPagoSignature,
@@ -44,15 +44,12 @@ export async function handleMercadoPagoWebhook(
     return { ok: false, code: "WEBHOOK_NOT_CONFIGURED", status: 503, dataId: null };
   }
 
-  let body: unknown = null;
-  try {
-    body = await request.json();
-  } catch {
-    body = null;
+  const url = new URL(request.url);
+  const dataId = extractWebhookQueryDataId(url.searchParams);
+  if (!dataId) {
+    return { ok: false, code: "MISSING_DATA_ID", status: 400, dataId: null };
   }
 
-  const url = new URL(request.url);
-  const dataId = extractWebhookDataId({ searchParams: url.searchParams, body });
   const requestId = request.headers.get("x-request-id");
   const signature = request.headers.get("x-signature");
 
@@ -71,10 +68,6 @@ export async function handleMercadoPagoWebhook(
   const now = deps?.now?.() ?? Date.now();
   if (!parsed || !isWebhookTimestampFresh(parsed.ts, now)) {
     return { ok: false, code: "EXPIRED_SIGNATURE", status: 401, dataId };
-  }
-
-  if (!dataId) {
-    return { ok: false, code: "INVALID_NOTIFICATION", status: 400, dataId: null };
   }
 
   if (!deps) {

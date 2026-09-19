@@ -1,18 +1,13 @@
 import "server-only";
 
+import { DIGITAL_SKU, PHYSICAL_SKU } from "@/lib/commerce/selection";
+import type { CommerceCatalogSnapshot, QuoteProduct } from "@/lib/commerce/quote";
 import { getSupabase, isSupabaseConfigured, SupabaseNotConfiguredError } from "@/lib/supabase/server";
 
-export type CatalogProduct = {
-  sku: string;
-  title: string;
-  type: "physical" | "digital";
-  isbn: string | null;
-  priceCents: number | null;
-  currency: string;
-  isActive: boolean;
-};
+export type CatalogProduct = QuoteProduct;
 
 type ProductRow = {
+  id: string;
   sku: string;
   title: string;
   type: "physical" | "digital";
@@ -22,12 +17,18 @@ type ProductRow = {
   is_active: boolean;
 };
 
-function mapProduct(row: ProductRow): CatalogProduct {
+type SettingsRow = {
+  physical_shipping_cents: number;
+  ebook_bump_price_cents: number;
+  currency: string;
+};
+
+function mapProduct(row: ProductRow): QuoteProduct {
   return {
+    id: row.id,
     sku: row.sku,
     title: row.title,
     type: row.type,
-    isbn: row.isbn,
     priceCents: row.price_cents,
     currency: row.currency,
     isActive: row.is_active,
@@ -46,7 +47,7 @@ export async function getCatalogProductBySku(sku: string): Promise<CatalogProduc
   const supabase = getSupabase();
   const { data, error } = await supabase
     .from("products")
-    .select("sku, title, type, isbn, price_cents, currency, is_active")
+    .select("id, sku, title, type, isbn, price_cents, currency, is_active")
     .eq("sku", sku)
     .maybeSingle();
 
@@ -55,4 +56,52 @@ export async function getCatalogProductBySku(sku: string): Promise<CatalogProduc
   }
 
   return data ? mapProduct(data as ProductRow) : null;
+}
+
+export async function loadCommerceCatalog(): Promise<CommerceCatalogSnapshot> {
+  if (!isSupabaseConfigured()) {
+    throw new SupabaseNotConfiguredError();
+  }
+
+  const supabase = getSupabase();
+
+  const [productsResult, settingsResult] = await Promise.all([
+    supabase
+      .from("products")
+      .select("id, sku, title, type, isbn, price_cents, currency, is_active")
+      .in("sku", [PHYSICAL_SKU, DIGITAL_SKU]),
+    supabase
+      .from("commerce_settings")
+      .select("physical_shipping_cents, ebook_bump_price_cents, currency")
+      .eq("id", 1)
+      .maybeSingle(),
+  ]);
+
+  if (productsResult.error) throw productsResult.error;
+  if (settingsResult.error) throw settingsResult.error;
+
+  const products = (productsResult.data ?? []) as ProductRow[];
+  const physical = products.find((row) => row.sku === PHYSICAL_SKU);
+  const digital = products.find((row) => row.sku === DIGITAL_SKU);
+  const settings = settingsResult.data as SettingsRow | null;
+
+  if (!physical || !digital || !settings) {
+    throw new Error("CATALOG_INCOMPLETE");
+  }
+
+  if (
+    settings.currency !== "BRL" ||
+    settings.physical_shipping_cents <= 0 ||
+    settings.ebook_bump_price_cents <= 0
+  ) {
+    throw new Error("CATALOG_INCOMPLETE");
+  }
+
+  return {
+    physical: mapProduct(physical),
+    digital: mapProduct(digital),
+    physicalShippingCents: settings.physical_shipping_cents,
+    ebookBumpPriceCents: settings.ebook_bump_price_cents,
+    currency: "BRL",
+  };
 }

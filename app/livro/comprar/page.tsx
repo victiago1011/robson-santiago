@@ -1,25 +1,52 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import CheckoutForm from "@/components/checkout/CheckoutForm";
+import { getPublicQuote } from "@/lib/commerce/get-public-quote";
 import { PHYSICAL_BOOK } from "@/lib/commerce/product";
+import {
+  checkoutOptionToKind,
+  parseCheckoutOptionParam,
+  selectionFromKind,
+} from "@/lib/commerce/selection";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Comprar A Vida é um Dia — Robson Santiago",
   description:
-    "Finalize a compra do livro físico A Vida é um Dia, de Robson Santiago.",
+    "Finalize a compra de A Vida é um Dia, de Robson Santiago: livro físico ou e-book.",
   robots: {
     index: false,
     follow: false,
   },
 };
 
-export default function ComprarLivroPage() {
+type ComprarLivroPageProps = {
+  searchParams: Promise<{ opcao?: string | string[] }>;
+};
+
+function formatLabel(kind: ReturnType<typeof checkoutOptionToKind>): string {
+  return kind === "physical" ? "Livro físico." : "E-book.";
+}
+
+export default async function ComprarLivroPage({ searchParams }: ComprarLivroPageProps) {
+  const params = await searchParams;
+  const option = parseCheckoutOptionParam(params.opcao);
+
+  if (!option) {
+    redirect("/livro/comprar?opcao=fisico");
+  }
+
+  const kind = checkoutOptionToKind(option);
+  const initialQuote = await getPublicQuote(selectionFromKind(kind));
+
   return (
     <main className="flex flex-1 flex-col bg-paper">
       <div className="mx-auto w-full max-w-[90rem] px-6 py-10 md:px-8 md:py-14 lg:px-12 lg:py-16 xl:px-16">
         <Link
-          href="/livro"
+          href="/livro#comprar"
           className="inline-flex min-h-11 items-center font-sans text-sm text-ink-soft underline-offset-4 hover:text-ink hover:underline focus-visible:outline-none focus-visible:underline"
         >
           ← Voltar ao livro
@@ -42,11 +69,11 @@ export default function ComprarLivroPage() {
               {PHYSICAL_BOOK.title}
             </h1>
             <p className="mt-2 font-display text-lg text-ink-soft italic">{PHYSICAL_BOOK.author}</p>
-            <p className="mt-3 font-sans text-sm text-ink">{PHYSICAL_BOOK.format}.</p>
+            <p className="mt-3 font-sans text-sm text-ink">{formatLabel(kind)}</p>
           </div>
         </header>
 
-        <CheckoutForm />
+        <CheckoutForm kind={kind} initialQuote={initialQuote} />
       </div>
     </main>
   );

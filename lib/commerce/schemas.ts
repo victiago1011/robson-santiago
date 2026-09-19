@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { BRAZILIAN_STATES } from "@/lib/commerce/address";
-import { isBasicCpfFormat, normalizeCpf } from "@/lib/commerce/cpf";
-import { PHYSICAL_BOOK } from "@/lib/commerce/product";
+import { BRAZILIAN_STATES } from "./address";
+import { isBasicCpfFormat, normalizeCpf } from "./cpf";
+import { PHYSICAL_QUANTITY } from "./selection";
 
 const trimmed = (max: number) => z.string().trim().min(1).max(max);
 
@@ -34,18 +34,34 @@ export const shippingAddressSchema = z.object({
   state: z.enum(BRAZILIAN_STATES),
 });
 
-export const orderItemSchema = z.object({
-  sku: z.literal(PHYSICAL_BOOK.sku),
-  quantity: z.number().int().min(PHYSICAL_BOOK.minQuantity).max(PHYSICAL_BOOK.maxQuantity),
-});
-
-export const createOrderSchema = z
+const physicalSelectionSchema = z
   .object({
-    sku: z.literal(PHYSICAL_BOOK.sku),
-    quantity: z.number().int().min(PHYSICAL_BOOK.minQuantity).max(PHYSICAL_BOOK.maxQuantity),
-    customer: customerSchema,
-    shipping: shippingAddressSchema,
+    kind: z.literal("physical"),
+    quantity: z.number().int().min(PHYSICAL_QUANTITY.min).max(PHYSICAL_QUANTITY.max),
+    ebookBump: z.boolean(),
   })
   .strict();
 
+const digitalSelectionSchema = z
+  .object({
+    kind: z.literal("digital"),
+  })
+  .strict();
+
+export const purchaseSelectionSchema = z.discriminatedUnion("kind", [
+  physicalSelectionSchema,
+  digitalSelectionSchema,
+]);
+
+export const createOrderSchema = z.discriminatedUnion("kind", [
+  physicalSelectionSchema.extend({
+    customer: customerSchema,
+    shipping: shippingAddressSchema,
+  }).strict(),
+  digitalSelectionSchema.extend({
+    customer: customerSchema,
+  }).strict(),
+]);
+
+export type PurchaseSelectionInput = z.infer<typeof purchaseSelectionSchema>;
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;

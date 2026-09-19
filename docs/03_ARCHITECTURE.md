@@ -129,11 +129,11 @@ Não criar todas antecipadamente. Implementar conforme aprovação.
 
 ## Integrações
 
-Aprovado nesta fase (infraestrutura, sem checkout comercial ativo):
+Aprovado nesta fase (catálogo, cotação e estrutura de pedidos; sem pagamento ativo):
 
-- Supabase / PostgreSQL para catálogo e pedidos;
+- Supabase / PostgreSQL para catálogo, configuração de frete/bump e pedidos;
 - cliente server-side com `SUPABASE_URL` e `SUPABASE_SECRET_KEY` (`lib/supabase/server.ts`); essas variáveis são somente servidor e não usam prefixo `NEXT_PUBLIC_`;
-- Route Handlers `GET /api/products/[sku]` e `POST /api/orders`.
+- Route Handlers `GET /api/products/[sku]`, `POST /api/checkout/quote` e `POST /api/orders`.
 
 Ainda **não** fazem parte da arquitetura em uso:
 
@@ -141,17 +141,39 @@ Ainda **não** fazem parte da arquitetura em uso:
 - autenticação de admin;
 - CMS;
 - Resend / e-mail transacional;
-- cálculo real de frete;
 - newsletter;
-- analytics específico.
+- analytics específico;
+- armazenamento ou download do PDF do e-book.
 
 ### Comércio
 
-Fonte de verdade de preço, disponibilidade e totais: **servidor + banco**. O frontend não envia nem decide `price`, `shipping` ou `total`.
+Fonte de verdade de preço, desconto, frete, subtotal e total: **servidor + banco**. O navegador envia só a seleção comercial (`physical` com `ebookBump` | `digital`), dados do comprador e endereço quando a seleção exige envio. Não aceitar `price`, `discount`, `shipping` ou `total` no body.
 
-`lib/commerce/product.ts` guarda só dados editoriais da UI (SKU, título, capa, limites de quantidade). `price_cents` e `is_active` vêm de `products`.
+Seleção comercial:
 
-Frete: `lib/commerce/shipping.ts`, estratégia atual `unconfigured`. Sem frete grátis, sem R$ 0 e sem valor fictício. `POST /api/orders` recusa a compra enquanto isso.
+- `physical`: 1 × a 5 × `AVIDA-FISICO`, com `ebookBump` opcional;
+- `digital`: 1 × `AVIDA-EBOOK` avulso.
+
+Não existe combo nem terceiro SKU. A página `/livro` oferece só físico e e-book.
+
+Preços oficiais (centavos inteiros):
+
+- `AVIDA-FISICO`: `3990` (`R$ 39,90`);
+- `AVIDA-EBOOK` avulso: `1990` (`R$ 19,90`);
+- order bump (1 e-book junto de um pedido físico): preço efetivo `1000` (`R$ 10,00`). O item permanece com preço de lista `1990`; o desconto `990` fica em `orders.discount_cents`.
+- o bump **não** se multiplica pela quantidade de livros físicos: sempre 1 e-book e desconto `990`.
+
+Frete: tabela `commerce_settings.physical_shipping_cents = 1500`, cobrado **uma vez** por pedido que contenha livro físico. Pedido só digital: `shipping_cents = 0` e `shipping_method = NULL`. Pedido físico (com ou sem bump): `shipping_method = flat_rate` e `shipping_cents = 1500`. O preço promocional do bump fica em `commerce_settings.ebook_bump_price_cents = 1000`.
+
+A cotação (`calculateOrderQuote` / `POST /api/checkout/quote`) monta os itens reais, calcula subtotal, desconto, frete e total, e devolve `purchasable` conforme `is_active`. Produtos permanecem **inativos** nesta fase (`purchasable = false`).
+
+`orders.promotion_code = AVIDA-EBOOK-BUMP` identifica o desconto do order bump. Sem bump, o campo é `NULL`. Em pedido físico + bump, `order_items` tem os dois produtos reais com snapshot do preço de lista.
+
+Endereço: obrigatório para físico (com ou sem bump); não exigido para e-book avulso. Essa regra é derivada da seleção no servidor, não de um boolean enviado pelo cliente.
+
+Criação de pedido: `POST /api/orders` recusa persistência enquanto o catálogo estiver inativo. Quando ativo, `create_commerce_order` (RPC transacional) insere `orders`, `order_items` e o evento `order_created` de uma vez. Sem dados de cartão. Sem conceder execute a `anon`/`authenticated`.
+
+`lib/commerce/product.ts` guarda só dados editoriais da UI (título, capa, limites de quantidade). Dinheiro não.
 
 Status independentes em `orders`:
 
@@ -162,13 +184,13 @@ Pagamento aprovado + envio em preparação: `payment_status = approved` e `fulfi
 
 Tentativas de pagamento ficam em `payments` (histórico). Eventos em `order_events`. Nenhum campo de cartão (PAN, CVV, validade, token PCI).
 
-RLS está ligado nas tabelas comerciais **sem** políticas para `anon`/`authenticated`. O App Router acessa o banco só com `SUPABASE_SECRET_KEY` no servidor. Catálogo público, quando existir, passará pela nossa API — não por SELECT anônimo no Supabase.
+RLS está ligado nas tabelas comerciais **sem** políticas para `anon`/`authenticated`. O App Router acessa o banco só com `SUPABASE_SECRET_KEY` no servidor. Catálogo público, quando existir, passa pela nossa API — não por SELECT anônimo no Supabase.
 
-A migration semeia `AVIDA-FISICO` e `AVIDA-EBOOK`, ambos inativos e sem preço. O arquivo do e-book não entra no repositório nem em `public/`.
+Checkout visual em `/livro/comprar?opcao=fisico|ebook`. Order bump do e-book aparece só no checkout físico. O botão final permanece desabilitado. Mercado Pago ainda inexistente.
 
-Checkout visual em `/livro/comprar` permanece desabilitado: produto inativo, preço nulo, frete não configurado, Mercado Pago ainda inexistente.
+PDF do e-book: o arquivo existe fora do repositório. Posteriormente será associado a `AVIDA-EBOOK` em bucket privado do Supabase Storage, com download só após `payment_status = approved` via URL assinada temporária. Nenhum caminho de arquivo é persistido nesta fase.
 
-A migration em `supabase/migrations/` precisa ser aplicada manualmente no projeto Supabase. Não assume ambiente já provisionado.
+A migration em `supabase/migrations/` precisa ser aplicada manualmente no projeto Supabase. Não assume ambiente já provisionado. Não editar a migration já aplicada; novas mudanças entram em arquivos novos.
 
 CPF: persistir 11 dígitos, sem máscara. Validação atual é de formato/tamanho, não do dígito verificador.
 

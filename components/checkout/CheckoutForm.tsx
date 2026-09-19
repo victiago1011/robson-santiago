@@ -1,14 +1,32 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import CustomerFields from "@/components/checkout/CustomerFields";
+import EbookBumpOffer from "@/components/checkout/EbookBumpOffer";
 import OrderSummary from "@/components/checkout/OrderSummary";
 import PaymentPlaceholder from "@/components/checkout/PaymentPlaceholder";
 import ShippingFields from "@/components/checkout/ShippingFields";
 import { PHYSICAL_BOOK } from "@/lib/commerce/product";
+import type { PublicQuote } from "@/lib/commerce/quote";
+import type { PurchaseKind } from "@/lib/commerce/selection";
 
-export default function CheckoutForm() {
-  const [quantity, setQuantity] = useState<number>(PHYSICAL_BOOK.minQuantity);
+type CheckoutFormProps = {
+  kind: PurchaseKind;
+  initialQuote: PublicQuote | null;
+};
+
+type RemoteQuoteState = {
+  quantity: number;
+  ebookBump: boolean;
+  quote: PublicQuote;
+};
+
+export default function CheckoutForm({ kind, initialQuote }: CheckoutFormProps) {
+  const [quantity, setQuantity] = useState<number>(
+    kind === "physical" ? PHYSICAL_BOOK.minQuantity : 1,
+  );
+  const [ebookBump, setEbookBump] = useState(false);
+  const [remote, setRemote] = useState<RemoteQuoteState | null>(null);
 
   const handleQuantityChange = (nextQuantity: number) => {
     setQuantity(
@@ -16,9 +34,62 @@ export default function CheckoutForm() {
     );
   };
 
+  const isDefaultPhysical =
+    kind === "physical" && quantity === PHYSICAL_BOOK.minQuantity && ebookBump === false;
+  const needsRemoteQuote = kind === "physical" && !isDefaultPhysical;
+
+  useEffect(() => {
+    if (!needsRemoteQuote) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void fetch("/api/checkout/quote", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: "physical", quantity, ebookBump }),
+    })
+      .then(async (response) => {
+        const data: unknown = await response.json();
+        if (cancelled) return;
+        if (
+          typeof data === "object" &&
+          data !== null &&
+          "ok" in data &&
+          data.ok === true &&
+          "quote" in data
+        ) {
+          setRemote({
+            quantity,
+            ebookBump,
+            quote: data.quote as PublicQuote,
+          });
+        }
+      })
+      .catch(() => {
+        // Keep the last successful quote; do not invent totals in the browser.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [needsRemoteQuote, quantity, ebookBump]);
+
+  const quote =
+    kind !== "physical" || isDefaultPhysical
+      ? initialQuote
+      : remote && remote.quantity === quantity && remote.ebookBump === ebookBump
+        ? remote.quote
+        : initialQuote;
+  const quoting =
+    needsRemoteQuote && !(remote && remote.quantity === quantity && remote.ebookBump === ebookBump);
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
   };
+
+  const requiresShipping = kind !== "digital";
 
   return (
     <form
@@ -26,16 +97,36 @@ export default function CheckoutForm() {
       noValidate
       className="mt-12 grid items-start gap-12 md:grid-cols-12 md:gap-x-10 lg:gap-x-14"
     >
-      <input type="hidden" name="sku" value={PHYSICAL_BOOK.sku} />
-      <input type="hidden" name="quantity" value={quantity} />
+      <input type="hidden" name="kind" value={kind} />
+      {kind === "physical" ? <input type="hidden" name="quantity" value={quantity} /> : null}
+      {kind === "physical" ? <input type="hidden" name="ebook_bump" value={ebookBump ? "true" : "false"} /> : null}
 
       <div className="flex min-w-0 flex-col gap-12 md:col-span-7">
         <CustomerFields />
-        <ShippingFields />
+        {requiresShipping ? <ShippingFields /> : null}
+        {kind === "digital" ? (
+          <p className="font-sans text-sm leading-relaxed text-ink-soft">
+            Entrega digital após confirmação do pagamento.
+          </p>
+        ) : null}
       </div>
 
       <aside className="min-w-0 md:sticky md:top-28 md:col-span-5 md:row-span-2">
-        <OrderSummary quantity={quantity} onQuantityChange={handleQuantityChange} />
+        <OrderSummary
+          quote={quote}
+          quantity={quantity}
+          quantityEditable={kind === "physical"}
+          onQuantityChange={kind === "physical" ? handleQuantityChange : undefined}
+          quoting={quoting}
+        />
+        {kind === "physical" ? (
+          <EbookBumpOffer
+            checked={ebookBump}
+            onChange={setEbookBump}
+            listPriceCents={quote?.ebookListPriceCents ?? initialQuote?.ebookListPriceCents ?? null}
+            bumpPriceCents={quote?.ebookBumpPriceCents ?? initialQuote?.ebookBumpPriceCents ?? null}
+          />
+        ) : null}
       </aside>
 
       <div className="flex min-w-0 flex-col gap-12 md:col-span-7">

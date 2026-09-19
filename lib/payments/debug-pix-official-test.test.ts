@@ -67,25 +67,32 @@ test("secret inválido não chama Mercado Pago", async () => {
   }
 });
 
-test("Access Token APP_USR é rejeitado com 403", () => {
+test("Access Token ausente não chama Mercado Pago", () => {
+  const result = authorizeDebugPixRequest(request(`Bearer ${DEBUG_SECRET}`), {
+    DEBUG_MERCADO_PAGO_SECRET: DEBUG_SECRET,
+  });
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.status, 503);
+    assert.equal(result.body.error, "MERCADO_PAGO_NOT_CONFIGURED");
+  }
+});
+
+test("APP_USR- + secret válido é autorizado no diagnóstico", () => {
   const result = authorizeDebugPixRequest(request(`Bearer ${DEBUG_SECRET}`), {
     DEBUG_MERCADO_PAGO_SECRET: DEBUG_SECRET,
     MERCADO_PAGO_ACCESS_TOKEN: PROD_TOKEN,
   });
-  assert.equal(result.ok, false);
-  if (!result.ok) {
-    assert.equal(result.status, 403);
-    assert.equal(result.body.error, "FORBIDDEN");
-  }
+  assert.equal(result.ok, true);
 });
 
-test("TEST- + secret válido cria a Order mínima e consulta depois da espera", async () => {
+test("secret válido cria a Order mínima e consulta depois da espera", async () => {
   const calls: Array<{ url: string; method: string; body: string | null }> = [];
   const result = await runOfficialPixDiagnostic(
     request(`Bearer ${DEBUG_SECRET}`),
     {
       DEBUG_MERCADO_PAGO_SECRET: DEBUG_SECRET,
-      MERCADO_PAGO_ACCESS_TOKEN: TEST_TOKEN,
+      MERCADO_PAGO_ACCESS_TOKEN: PROD_TOKEN,
     },
     {
       waitMs: 1,

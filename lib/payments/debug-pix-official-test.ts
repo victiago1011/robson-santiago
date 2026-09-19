@@ -1,5 +1,5 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
-import { getMercadoPagoAccessToken, isMercadoPagoTestAccessToken } from "@/lib/payments/config";
+import { getMercadoPagoAccessToken } from "@/lib/payments/config";
 
 export const OFFICIAL_PIX_TEST_ORDER_BODY = {
   type: "online",
@@ -173,14 +173,6 @@ export function authorizeDebugPixRequest(
       ok: false,
       status: 503,
       body: { httpStatus: 503, error: "MERCADO_PAGO_NOT_CONFIGURED", message: "access token missing" },
-    };
-  }
-
-  if (!isMercadoPagoTestAccessToken(accessToken)) {
-    return {
-      ok: false,
-      status: 403,
-      body: { httpStatus: 403, error: "FORBIDDEN", message: "test credentials required" },
     };
   }
 

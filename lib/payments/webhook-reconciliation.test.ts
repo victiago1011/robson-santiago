@@ -35,9 +35,20 @@ const PAYMENT_ID = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
 const PROVIDER_ORDER_ID = "ORD01ABC";
 const NOW = 1_800_000_000_000;
 
+function independentManifest(dataId: string, requestId: string, ts: string) {
+  const segments: string[] = [];
+  if (dataId) {
+    segments.push(`id:${dataId}`);
+  }
+  if (requestId) {
+    segments.push(`request-id:${requestId}`);
+  }
+  segments.push(`ts:${ts}`);
+  return `${segments.join(";")};`;
+}
+
 function sign(dataId: string, requestId: string, ts: string) {
-  const manifest = buildWebhookManifest({ dataId, requestId, ts });
-  return createHmac("sha256", SECRET).update(manifest).digest("hex");
+  return createHmac("sha256", SECRET).update(independentManifest(dataId, requestId, ts)).digest("hex");
 }
 
 function signedRequest(options?: {
@@ -320,38 +331,88 @@ test("assinatura gerada com id do body divergente é rejeitada", async () => {
   assert.equal(events.length, 0);
 });
 
-test("data.id alfanumérico maiúsculo entra em lowercase no manifesto", async () => {
+test("data.id no manifesto preserva casing original e rejeita HMAC lowercase", async () => {
   const ts = String(Math.floor(NOW / 1000));
-  const queryId = "ORD01JQ4S4KY8HWQ6NA5PXB65B3D3";
-  assert.equal(normalizeWebhookDataId(queryId), "ord01jq4s4ky8hwq6na5pxb65b3d3");
+  const numericId = "123456";
+  const uppercaseId = "ORD01M28P44G5FG8RJPM579EH56FV";
+  const mixedId = "Ord01AbC";
+  const requestId = "req-1";
+
+  assert.equal(normalizeWebhookDataId(`  ${uppercaseId}  `), uppercaseId);
   assert.equal(
-    buildWebhookManifest({ dataId: queryId, requestId: "req-1", ts }),
-    `id:ord01jq4s4ky8hwq6na5pxb65b3d3;request-id:req-1;ts:${ts};`,
+    buildWebhookManifest({ dataId: numericId, requestId, ts }),
+    `id:123456;request-id:${requestId};ts:${ts};`,
   );
+  assert.equal(
+    buildWebhookManifest({ dataId: uppercaseId, requestId, ts }),
+    `id:ORD01M28P44G5FG8RJPM579EH56FV;request-id:${requestId};ts:${ts};`,
+  );
+  assert.equal(
+    buildWebhookManifest({ dataId: mixedId, requestId, ts }),
+    `id:Ord01AbC;request-id:${requestId};ts:${ts};`,
+  );
+
+  const uppercaseV1 = sign(uppercaseId, requestId, ts);
+  const lowercaseV1 = sign(uppercaseId.toLowerCase(), requestId, ts);
+  assert.notEqual(uppercaseV1, lowercaseV1);
+
   assert.equal(
     verifyMercadoPagoSignature({
       secret: SECRET,
-      signatureHeader: `ts=${ts},v1=${sign(queryId, "req-1", ts)}`,
-      requestId: "req-1",
-      dataId: queryId,
+      signatureHeader: `ts=${ts},v1=${uppercaseV1}`,
+      requestId,
+      dataId: uppercaseId,
     }),
     true,
   );
   assert.equal(
-    extractWebhookQueryDataId(new URLSearchParams(`data.id=${queryId}`)),
-    queryId,
+    verifyMercadoPagoSignature({
+      secret: SECRET,
+      signatureHeader: `ts=${ts},v1=${lowercaseV1}`,
+      requestId,
+      dataId: uppercaseId,
+    }),
+    false,
+  );
+  assert.equal(
+    extractWebhookQueryDataId(new URLSearchParams(`data.id=${uppercaseId}`)),
+    uppercaseId,
   );
 
   const getCalls = { count: 0, ids: [] as string[] };
   const { store } = mockStore();
   const result = await handle(
-    signedRequest({ dataId: queryId }),
-    async () => mpOrder({ id: queryId, external_reference: "missing-local" }),
+    signedRequest({ dataId: uppercaseId }),
+    async () => mpOrder({ id: uppercaseId, external_reference: "missing-local" }),
     store,
     getCalls,
   );
   assert.equal(result.status, 200);
-  assert.deepEqual(getCalls.ids, [queryId]);
+  assert.deepEqual(getCalls.ids, [uppercaseId]);
+
+  const rejected = { count: 0, ids: [] as string[] };
+  const { store: rejectStore, events } = mockStore();
+  const invalid = await handle(
+    signedRequest({ dataId: uppercaseId, signature: lowercaseV1 }),
+    async () => mpOrder({ id: uppercaseId }),
+    rejectStore,
+    rejected,
+  );
+  assert.equal(invalid.code, "INVALID_SIGNATURE");
+  assert.equal(invalid.status, 401);
+  assert.equal(rejected.count, 0);
+  assert.equal(events.length, 0);
+
+  const numericCalls = { count: 0, ids: [] as string[] };
+  const { store: numericStore } = mockStore();
+  const numeric = await handle(
+    signedRequest({ dataId: numericId }),
+    async () => mpOrder({ id: numericId, external_reference: "missing-local" }),
+    numericStore,
+    numericCalls,
+  );
+  assert.equal(numeric.status, 200);
+  assert.deepEqual(numericCalls.ids, [numericId]);
 });
 
 test("data.id da query é extraído mesmo se o body for diferente", () => {

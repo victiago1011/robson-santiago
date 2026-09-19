@@ -20,7 +20,7 @@ export type CreateOrderFailure = {
   status: number;
 };
 
-export type CreateOrderSuccess = { ok: true; publicId: string };
+export type CreateOrderSuccess = { ok: true; publicId: string; orderId: string };
 
 export type CreateOrderResult = CreateOrderSuccess | CreateOrderFailure;
 
@@ -109,12 +109,12 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     }
 
     const created = data as CreatedOrderRow;
-    if (!created.public_id) {
+    if (!created.public_id || !created.id) {
       console.error("order_persist_failed", { code: "MISSING_PUBLIC_ID" });
       return { ok: false, code: "ORDER_PERSISTENCE_FAILED", status: 503 };
     }
 
-    return { ok: true, publicId: created.public_id };
+    return { ok: true, publicId: created.public_id, orderId: created.id };
   } catch (error) {
     if (error instanceof SupabaseNotConfiguredError) {
       return { ok: false, code: "SUPABASE_NOT_CONFIGURED", status: 503 };

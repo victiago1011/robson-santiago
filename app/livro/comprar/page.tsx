@@ -73,7 +73,11 @@ export default async function ComprarLivroPage({ searchParams }: ComprarLivroPag
           </div>
         </header>
 
-        <CheckoutForm kind={kind} initialQuote={initialQuote} />
+        <CheckoutForm
+          kind={kind}
+          initialQuote={initialQuote}
+          mercadoPagoPublicKey={process.env.NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY?.trim() || null}
+        />
       </div>
     </main>
   );

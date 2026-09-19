@@ -1,16 +1,23 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import CustomerFields from "@/components/checkout/CustomerFields";
 import OrderSummary from "@/components/checkout/OrderSummary";
+import PaymentSection, {
+  type CheckoutPaymentUiState,
+} from "@/components/checkout/PaymentSection";
 import ShippingFields from "@/components/checkout/ShippingFields";
 import { PHYSICAL_BOOK } from "@/lib/commerce/product";
 import type { PublicQuote } from "@/lib/commerce/quote";
 import type { PurchaseKind } from "@/lib/commerce/selection";
+import { newPaymentAttemptId } from "@/lib/payments/idempotency";
+import type { CheckoutPaymentMethod } from "@/lib/payments/schemas";
+import type { PublicPaymentResult } from "@/lib/payments/types";
 
 type CheckoutFormProps = {
   kind: PurchaseKind;
   initialQuote: PublicQuote | null;
+  mercadoPagoPublicKey: string | null;
 };
 
 type RemoteQuoteState = {
@@ -19,12 +26,61 @@ type RemoteQuoteState = {
   quote: PublicQuote;
 };
 
-export default function CheckoutForm({ kind, initialQuote }: CheckoutFormProps) {
+function userFacingPaymentMessage(code?: string): string {
+  if (code === "PRODUCT_NOT_AVAILABLE") {
+    return "Este produto ainda não está disponível para compra.";
+  }
+  if (code === "VALIDATION_ERROR") {
+    return "Revise os dados preenchidos e tente novamente.";
+  }
+  return "Não foi possível processar o pagamento. Tente novamente.";
+}
+
+function readCheckoutFields(form: HTMLFormElement) {
+  const data = new FormData(form);
+  const read = (name: string) => String(data.get(name) ?? "").trim();
+  return {
+    customer: {
+      name: read("customer_name"),
+      email: read("customer_email"),
+      phone: read("customer_phone"),
+      document: read("customer_document"),
+    },
+    shipping: {
+      zip: read("shipping_zip"),
+      street: read("shipping_street"),
+      number: read("shipping_number"),
+      complement: read("shipping_complement") || undefined,
+      district: read("shipping_district"),
+      city: read("shipping_city"),
+      state: read("shipping_state"),
+    },
+  };
+}
+
+export default function CheckoutForm({
+  kind,
+  initialQuote,
+  mercadoPagoPublicKey,
+}: CheckoutFormProps) {
+  const formRef = useRef<HTMLFormElement>(null);
+  const paymentAttemptIdRef = useRef(newPaymentAttemptId());
+  const processingRef = useRef(false);
+
   const [quantity, setQuantity] = useState<number>(
     kind === "physical" ? PHYSICAL_BOOK.minQuantity : 1,
   );
   const [ebookBump, setEbookBump] = useState(false);
   const [remote, setRemote] = useState<RemoteQuoteState | null>(null);
+  const [payerEmail, setPayerEmail] = useState("");
+  const [payerDocument, setPayerDocument] = useState("");
+  const [uiState, setUiState] = useState<CheckoutPaymentUiState>(
+    mercadoPagoPublicKey ? "loading" : "error",
+  );
+  const [payment, setPayment] = useState<PublicPaymentResult | null>(null);
+  const [message, setMessage] = useState<string | null>(
+    mercadoPagoPublicKey ? null : "Não foi possível carregar os meios de pagamento.",
+  );
 
   const handleQuantityChange = (nextQuantity: number) => {
     setQuantity(
@@ -89,8 +145,93 @@ export default function CheckoutForm({ kind, initialQuote }: CheckoutFormProps) 
 
   const requiresShipping = kind !== "digital";
 
+  const submitPayment = async (method: CheckoutPaymentMethod) => {
+    if (processingRef.current) {
+      return;
+    }
+    processingRef.current = true;
+    setUiState("processing");
+    setMessage(null);
+
+    const form = formRef.current;
+    if (!form) {
+      processingRef.current = false;
+      setUiState("error");
+      setMessage(userFacingPaymentMessage("VALIDATION_ERROR"));
+      throw new Error("FORM_UNAVAILABLE");
+    }
+
+    const fields = readCheckoutFields(form);
+    const payload =
+      kind === "physical"
+        ? {
+            kind: "physical" as const,
+            quantity,
+            ebookBump,
+            customer: fields.customer,
+            shipping: fields.shipping,
+            paymentAttemptId: paymentAttemptIdRef.current,
+            payment: method,
+          }
+        : {
+            kind: "digital" as const,
+            customer: fields.customer,
+            paymentAttemptId: paymentAttemptIdRef.current,
+            payment: method,
+          };
+
+    try {
+      const response = await fetch("/api/checkout/pay", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data: unknown = await response.json();
+
+      if (
+        typeof data === "object" &&
+        data !== null &&
+        "ok" in data &&
+        data.ok === true &&
+        "payment" in data
+      ) {
+        const result = data.payment as PublicPaymentResult;
+        setPayment(result);
+        if (result.method === "pix" && result.pix && result.status !== "approved") {
+          setUiState("awaiting_pix");
+          return;
+        }
+        if (result.status === "approved") {
+          setUiState("approved");
+          return;
+        }
+        if (result.status === "rejected" || result.status === "cancelled") {
+          paymentAttemptIdRef.current = newPaymentAttemptId();
+          setUiState("rejected");
+          return;
+        }
+        setUiState(result.status === "in_process" ? "processing" : "ready");
+        return;
+      }
+
+      const code =
+        typeof data === "object" && data !== null && "code" in data ? String(data.code) : undefined;
+      paymentAttemptIdRef.current = newPaymentAttemptId();
+      setUiState("error");
+      setMessage(userFacingPaymentMessage(code));
+    } catch {
+      paymentAttemptIdRef.current = newPaymentAttemptId();
+      setUiState("error");
+      setMessage(userFacingPaymentMessage());
+      throw new Error("PAYMENT_REQUEST_FAILED");
+    } finally {
+      processingRef.current = false;
+    }
+  };
+
   return (
     <form
+      ref={formRef}
       onSubmit={handleSubmit}
       noValidate
       className="mt-12 grid items-start gap-12 md:grid-cols-12 md:gap-x-10 lg:gap-x-14"
@@ -100,13 +241,36 @@ export default function CheckoutForm({ kind, initialQuote }: CheckoutFormProps) 
       {kind === "physical" ? <input type="hidden" name="ebook_bump" value={ebookBump ? "true" : "false"} /> : null}
 
       <div className="flex min-w-0 flex-col gap-12 md:col-span-7">
-        <CustomerFields />
+        <CustomerFields
+          onEmailChange={setPayerEmail}
+          onDocumentChange={setPayerDocument}
+        />
         {requiresShipping ? <ShippingFields /> : null}
         {kind === "digital" ? (
           <p className="font-sans text-sm leading-relaxed text-ink-soft">
             Entrega digital após confirmação do pagamento.
           </p>
         ) : null}
+        <PaymentSection
+          publicKey={mercadoPagoPublicKey}
+          amountCents={quote?.totalCents ?? null}
+          quoting={quoting}
+          payerEmail={payerEmail}
+          payerDocument={payerDocument}
+          uiState={uiState}
+          payment={payment}
+          message={message}
+          onBrickReady={() => {
+            if (!processingRef.current) {
+              setUiState((current) => (current === "loading" ? "ready" : current));
+            }
+          }}
+          onSubmitPayment={submitPayment}
+          onBrickError={() => {
+            setUiState("error");
+            setMessage("Não foi possível carregar os meios de pagamento.");
+          }}
+        />
       </div>
 
       <aside className="flex min-w-0 flex-col gap-8 md:sticky md:top-28 md:col-span-5">
@@ -119,18 +283,6 @@ export default function CheckoutForm({ kind, initialQuote }: CheckoutFormProps) 
           ebookBump={ebookBump}
           onEbookBumpChange={kind === "physical" ? setEbookBump : undefined}
         />
-        <div>
-          <button
-            type="submit"
-            disabled
-            className="inline-flex min-h-12 w-full items-center justify-center rounded-lg bg-ink px-5 font-sans text-sm font-medium tracking-[0.14em] text-paper-strong uppercase opacity-40"
-          >
-            Finalizar compra
-          </button>
-          <p className="mt-3 font-sans text-xs leading-relaxed text-ink-soft">
-            Pagamento será habilitado na próxima etapa.
-          </p>
-        </div>
       </aside>
     </form>
   );

@@ -1,6 +1,14 @@
 import { InputField } from "@/components/checkout/Field";
 
-export default function CustomerFields() {
+type CustomerFieldsProps = {
+  onEmailChange?: (value: string) => void;
+  onDocumentChange?: (value: string) => void;
+};
+
+export default function CustomerFields({
+  onEmailChange,
+  onDocumentChange,
+}: CustomerFieldsProps) {
   return (
     <fieldset className="min-w-0 border-0 p-0">
       <legend className="font-display text-2xl tracking-tight text-ink md:text-[1.75rem]">
@@ -25,6 +33,7 @@ export default function CustomerFields() {
           inputMode="email"
           autoComplete="email"
           required
+          onChange={(event) => onEmailChange?.(event.target.value)}
         />
         <InputField
           id="customer_phone"
@@ -42,6 +51,7 @@ export default function CustomerFields() {
             label="CPF"
             inputMode="numeric"
             autoComplete="off"
+            onChange={(event) => onDocumentChange?.(event.target.value)}
             required
           />
         </div>

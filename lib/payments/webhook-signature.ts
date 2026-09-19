@@ -45,10 +45,15 @@ export function extractWebhookDataId(input: {
     "data" in input.body &&
     typeof input.body.data === "object" &&
     input.body.data !== null &&
-    "id" in input.body.data &&
-    typeof input.body.data.id === "string"
+    "id" in input.body.data
   ) {
-    return input.body.data.id.trim();
+    const rawId = input.body.data.id;
+    if (typeof rawId === "string" && rawId.trim()) {
+      return rawId.trim();
+    }
+    if (typeof rawId === "number" && Number.isFinite(rawId)) {
+      return String(rawId);
+    }
   }
 
   return null;
@@ -79,6 +84,35 @@ export function signaturesMatch(expectedHex: string, computedHex: string): boole
     return false;
   }
   return timingSafeEqual(expected, computed);
+}
+
+export const WEBHOOK_SIGNATURE_MAX_AGE_MS = 15 * 60 * 1000;
+
+export function webhookTimestampToMs(ts: string): number | null {
+  if (!/^\d+$/.test(ts)) {
+    return null;
+  }
+  if (ts.length >= 13) {
+    const ms = Number(ts);
+    return Number.isSafeInteger(ms) ? ms : null;
+  }
+  const seconds = Number(ts);
+  if (!Number.isSafeInteger(seconds)) {
+    return null;
+  }
+  return seconds * 1000;
+}
+
+export function isWebhookTimestampFresh(
+  ts: string,
+  nowMs: number = Date.now(),
+  maxAgeMs: number = WEBHOOK_SIGNATURE_MAX_AGE_MS,
+): boolean {
+  const tsMs = webhookTimestampToMs(ts);
+  if (tsMs === null) {
+    return false;
+  }
+  return Math.abs(nowMs - tsMs) <= maxAgeMs;
 }
 
 export function verifyMercadoPagoSignature(input: {

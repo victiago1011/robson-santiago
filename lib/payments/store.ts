@@ -2,7 +2,7 @@ import "server-only";
 
 import { getSupabase } from "@/lib/supabase/server";
 import type { ExistingPaymentAttempt } from "@/lib/payments/idempotency";
-import type { PaymentStatus } from "@/lib/payments/status";
+import type { OrderPaymentStatus, PaymentStatus } from "@/lib/payments/status";
 
 type PaymentRow = {
   id: string;
@@ -129,6 +129,102 @@ export async function insertOrderEvent(
     event_type: eventType,
     metadata,
   });
+
+  if (error) {
+    throw error;
+  }
+}
+
+type OrderLookupRow = {
+  id: string;
+  public_id: string;
+  total_cents: number | null;
+  currency: string;
+  payment_status: string;
+  fulfillment_status: string;
+};
+
+export async function findOrderByPublicId(publicId: string): Promise<{
+  id: string;
+  publicId: string;
+  totalCents: number | null;
+  currency: string;
+  paymentStatus: OrderPaymentStatus;
+  fulfillmentStatus: string;
+} | null> {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("orders")
+    .select("id, public_id, total_cents, currency, payment_status, fulfillment_status")
+    .eq("public_id", publicId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+  if (!data) {
+    return null;
+  }
+
+  const row = data as OrderLookupRow;
+  return {
+    id: row.id,
+    publicId: row.public_id,
+    totalCents: row.total_cents,
+    currency: row.currency,
+    paymentStatus: row.payment_status as OrderPaymentStatus,
+    fulfillmentStatus: row.fulfillment_status,
+  };
+}
+
+type PaymentLookupRow = {
+  id: string;
+  order_id: string;
+  provider: string;
+  provider_order_id: string | null;
+  provider_payment_id: string | null;
+  status: PaymentStatus;
+};
+
+export async function listPaymentsForOrder(orderId: string): Promise<
+  {
+    id: string;
+    orderId: string;
+    provider: string;
+    providerOrderId: string | null;
+    providerPaymentId: string | null;
+    status: PaymentStatus;
+  }[]
+> {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("payments")
+    .select("id, order_id, provider, provider_order_id, provider_payment_id, status")
+    .eq("order_id", orderId);
+
+  if (error) {
+    throw error;
+  }
+
+  return ((data as PaymentLookupRow[] | null) ?? []).map((row) => ({
+    id: row.id,
+    orderId: row.order_id,
+    provider: row.provider,
+    providerOrderId: row.provider_order_id,
+    providerPaymentId: row.provider_payment_id,
+    status: row.status,
+  }));
+}
+
+export async function updateOrderPaymentStatus(
+  orderId: string,
+  paymentStatus: OrderPaymentStatus,
+): Promise<void> {
+  const supabase = getSupabase();
+  const { error } = await supabase
+    .from("orders")
+    .update({ payment_status: paymentStatus })
+    .eq("id", orderId);
 
   if (error) {
     throw error;

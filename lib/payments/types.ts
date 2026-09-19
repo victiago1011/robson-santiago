@@ -13,6 +13,8 @@ export type MercadoPagoTransactionPayment = {
   id?: string | null;
   status?: string | null;
   status_detail?: string | null;
+  amount?: string | null;
+  paid_amount?: string | null;
   payment_method?: MercadoPagoPaymentMethod | null;
 };
 
@@ -22,6 +24,9 @@ export type MercadoPagoOrder = {
   status_detail?: string | null;
   external_reference?: string | null;
   total_amount?: string | null;
+  total_paid_amount?: string | null;
+  currency?: string | null;
+  currency_id?: string | null;
   transactions?: {
     payments?: MercadoPagoTransactionPayment[] | null;
   } | null;

@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { createHmac } from "node:crypto";
 import { test } from "node:test";
 import { calculateQuoteFromCatalog, type CommerceCatalogSnapshot } from "@/lib/commerce/quote";
 import { checkoutPaySchema } from "@/lib/payments/schemas";
@@ -8,7 +7,6 @@ import { decidePaymentAttemptAction } from "@/lib/payments/idempotency";
 import { startCheckoutPayment, type CheckoutPaymentDependencies } from "@/lib/payments/start-checkout-payment";
 import { handleMercadoPagoWebhook } from "@/lib/payments/handle-webhook";
 import { assertNoSensitiveFields } from "@/lib/payments/sanitize";
-import { buildWebhookManifest, verifyMercadoPagoSignature } from "@/lib/payments/webhook-signature";
 import type { ExistingPaymentAttempt } from "@/lib/payments/idempotency";
 import type { MercadoPagoOrder } from "@/lib/payments/types";
 
@@ -302,39 +300,6 @@ test("webhook com assinatura inválida não processa", async () => {
   assert.equal(result.ok, false);
   assert.equal(result.code, "INVALID_SIGNATURE");
   assert.equal(result.status, 401);
-});
-
-test("assinatura HMAC válida é reconhecida, mas reconciliação permanece desligada", async () => {
-  const secret = "test-secret";
-  const dataId = "ORD01ABC";
-  const requestId = "req-1";
-  const ts = "1704908010";
-  const manifest = buildWebhookManifest({ dataId, requestId, ts });
-  const v1 = createHmac("sha256", secret).update(manifest).digest("hex");
-  assert.equal(
-    verifyMercadoPagoSignature({
-      secret,
-      signatureHeader: `ts=${ts},v1=${v1}`,
-      requestId,
-      dataId,
-    }),
-    true,
-  );
-
-  const request = new Request(
-    `https://www.robsonsantiago.com.br/api/webhooks/mercado-pago?data.id=${dataId}`,
-    {
-      method: "POST",
-      headers: {
-        "x-signature": `ts=${ts},v1=${v1}`,
-        "x-request-id": requestId,
-      },
-      body: JSON.stringify({ type: "order", data: { id: dataId } }),
-    },
-  );
-  const result = await handleMercadoPagoWebhook(request, { MERCADO_PAGO_WEBHOOK_SECRET: secret });
-  assert.equal(result.ok, false);
-  assert.equal(result.code, "WEBHOOK_PROCESSING_DISABLED");
 });
 
 test("API pública de pagamento não devolve dados sensíveis", async () => {

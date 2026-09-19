@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --experimental-strip-types --import ./scripts/register-ts-test-loader.mjs --test lib/commerce/quote.test.ts lib/payments/checkout-payment.test.ts"
+    "test": "node --experimental-strip-types --import ./scripts/register-ts-test-loader.mjs --test lib/commerce/quote.test.ts lib/payments/checkout-payment.test.ts lib/payments/webhook-reconciliation.test.ts"
   },
   "dependencies": {
     "@mercadopago/sdk-react": "^1.0.7",

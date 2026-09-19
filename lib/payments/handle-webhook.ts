@@ -160,7 +160,7 @@ export async function handleMercadoPagoWebhook(
       return { ok: true, code: "PROVIDER_STATUS_UNKNOWN", status: 200, dataId };
     }
 
-    await persistReconciliation(deps.store, providerOrder, decision);
+    await persistReconciliation(deps.store, providerOrder, decision, now);
     return { ok: true, code: "RECONCILED", status: 200, dataId };
   } catch {
     console.error("webhook_store_unavailable", { code: "WEBHOOK_STORE_UNAVAILABLE" });

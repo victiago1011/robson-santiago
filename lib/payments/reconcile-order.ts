@@ -19,6 +19,7 @@ export type WebhookOrderRecord = {
   currency: string;
   paymentStatus: OrderPaymentStatus;
   fulfillmentStatus: string;
+  paidAt: string | null;
 };
 
 export type WebhookPaymentRecord = {
@@ -40,7 +41,11 @@ export type WebhookPaymentStore = {
     status: PaymentStatus;
     statusDetail: string | null;
   }) => Promise<void>;
-  updateOrderPaymentStatus: (orderId: string, paymentStatus: OrderPaymentStatus) => Promise<void>;
+  updateOrderPaymentStatus: (
+    orderId: string,
+    paymentStatus: OrderPaymentStatus,
+    options?: { paidAt?: string },
+  ) => Promise<void>;
   insertEvent: (orderId: string, eventType: string, metadata: Record<string, unknown>) => Promise<void>;
 };
 
@@ -240,6 +245,7 @@ export async function persistReconciliation(
   store: WebhookPaymentStore,
   providerOrder: MercadoPagoOrder,
   decision: Extract<ReconcileDecision, { action: "apply" }>,
+  nowMs: number = Date.now(),
 ): Promise<void> {
   const transaction = firstTransaction(providerOrder);
   const statusDetail = transaction?.status_detail ?? providerOrder.status_detail ?? null;
@@ -267,7 +273,13 @@ export async function persistReconciliation(
   }
 
   if (!orderUnchanged && decision.applyOrder) {
-    await store.updateOrderPaymentStatus(decision.order.id, decision.nextOrderStatus);
+    const enteringApproved =
+      decision.nextOrderStatus === "approved" && decision.order.paymentStatus !== "approved";
+    const paidAt =
+      enteringApproved && !decision.order.paidAt ? new Date(nowMs).toISOString() : undefined;
+    await store.updateOrderPaymentStatus(decision.order.id, decision.nextOrderStatus, {
+      ...(paidAt ? { paidAt } : {}),
+    });
   }
 
   await store.insertEvent(decision.order.id, "payment_webhook_received", decision.metadata);

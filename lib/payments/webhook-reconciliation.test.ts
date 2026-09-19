@@ -91,6 +91,7 @@ function localOrder(overrides?: Partial<WebhookOrderRecord>): WebhookOrderRecord
     currency: "BRL",
     paymentStatus: "pending",
     fulfillmentStatus: "pending",
+    paidAt: null,
     ...overrides,
   };
 }
@@ -157,12 +158,15 @@ function mockStore(seed?: {
       row.providerPaymentId = input.providerPaymentId;
       row.status = input.status;
     },
-    updateOrderPaymentStatus: async (_orderId, paymentStatus) => {
+    updateOrderPaymentStatus: async (_orderId, paymentStatus, options) => {
       if (!order) {
         return;
       }
       fulfillmentSnapshots.push(order.fulfillmentStatus);
       order.paymentStatus = paymentStatus;
+      if (options?.paidAt && !order.paidAt) {
+        order.paidAt = options.paidAt;
+      }
     },
     insertEvent: async (orderId, eventType, metadata) => {
       assert.doesNotThrow(() => assertNoSensitiveFields(metadata));
@@ -467,6 +471,7 @@ test("pedido correto é localizado e aprovado", async () => {
   const result = await handle(signedRequest(), async () => mpOrder(), store, { count: 0, ids: [] });
   assert.equal(result.code, "RECONCILED");
   assert.equal(order?.paymentStatus, "approved");
+  assert.equal(order?.paidAt, new Date(NOW).toISOString());
   assert.equal(order?.fulfillmentStatus, "pending");
   assert.equal(payments[0].providerOrderId, PROVIDER_ORDER_ID);
   assert.equal(payments[0].status, "approved");
@@ -537,6 +542,38 @@ test("moeda diferente de BRL nunca aprova", async () => {
   assert.equal(order?.paymentStatus, "pending");
 });
 
+test("processed/accredited resulta approved e preenche paid_at", async () => {
+  const { store, order, payments } = mockStore();
+  const result = await handle(signedRequest(), async () => mpOrder(), store, { count: 0, ids: [] });
+  assert.equal(result.code, "RECONCILED");
+  assert.equal(order?.paymentStatus, "approved");
+  assert.equal(payments[0].status, "approved");
+  assert.equal(order?.paidAt, new Date(NOW).toISOString());
+  assert.equal(order?.fulfillmentStatus, "pending");
+});
+
+test("pending do provedor não preenche paid_at", async () => {
+  const { store, order } = mockStore();
+  const result = await handle(
+    signedRequest(),
+    async () =>
+      mpOrder({
+        status: "action_required",
+        status_detail: "waiting_transfer",
+        total_paid_amount: null,
+        transactions: {
+          payments: [{ id: "PAY01ABC", status: "action_required", status_detail: "waiting_transfer" }],
+        },
+      }),
+    store,
+    { count: 0, ids: [] },
+  );
+  assert.equal(result.code, "RECONCILED");
+  assert.equal(order?.paymentStatus, "pending");
+  assert.equal(order?.paidAt, null);
+  assert.equal(order?.fulfillmentStatus, "pending");
+});
+
 test("pending pode ir para approved", () => {
   assert.equal(canTransitionOrderPaymentStatus("pending", "approved"), true);
 });
@@ -561,8 +598,9 @@ test("approved não volta para pending", async () => {
 });
 
 test("approved pode ir para refunded", async () => {
+  const paidAt = "2026-01-02T03:04:05.000Z";
   const { store, order, payments } = mockStore({
-    order: localOrder({ paymentStatus: "approved" }),
+    order: localOrder({ paymentStatus: "approved", paidAt }),
     payments: [localPayment({ status: "approved" })],
   });
   const result = await handle(
@@ -578,19 +616,21 @@ test("approved pode ir para refunded", async () => {
   assert.equal(result.code, "RECONCILED");
   assert.equal(order?.paymentStatus, "refunded");
   assert.equal(payments[0].status, "refunded");
+  assert.equal(order?.paidAt, paidAt);
   assert.equal(order?.fulfillmentStatus, "pending");
 });
 
 test("duplicata mantém resultado e não regrava efeitos", async () => {
-  const { store, events } = mockStore({
-    order: localOrder({ paymentStatus: "approved" }),
-    payments: [localPayment({ status: "approved" })],
-  });
+  const { store, order, events } = mockStore();
   const first = await handle(signedRequest(), async () => mpOrder(), store, { count: 0, ids: [] });
+  const paidAt = order?.paidAt;
   const eventCount = events.length;
   const second = await handle(signedRequest(), async () => mpOrder(), store, { count: 0, ids: [] });
   assert.equal(first.code, "RECONCILED");
   assert.equal(second.code, "RECONCILED");
+  assert.equal(order?.paymentStatus, "approved");
+  assert.equal(order?.paidAt, paidAt);
+  assert.equal(order?.paidAt, new Date(NOW).toISOString());
   assert.equal(events.length, eventCount);
 });
 

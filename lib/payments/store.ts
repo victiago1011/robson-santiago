@@ -142,6 +142,7 @@ type OrderLookupRow = {
   currency: string;
   payment_status: string;
   fulfillment_status: string;
+  paid_at: string | null;
 };
 
 export async function findOrderByPublicId(publicId: string): Promise<{
@@ -151,11 +152,12 @@ export async function findOrderByPublicId(publicId: string): Promise<{
   currency: string;
   paymentStatus: OrderPaymentStatus;
   fulfillmentStatus: string;
+  paidAt: string | null;
 } | null> {
   const supabase = getSupabase();
   const { data, error } = await supabase
     .from("orders")
-    .select("id, public_id, total_cents, currency, payment_status, fulfillment_status")
+    .select("id, public_id, total_cents, currency, payment_status, fulfillment_status, paid_at")
     .eq("public_id", publicId)
     .maybeSingle();
 
@@ -174,6 +176,7 @@ export async function findOrderByPublicId(publicId: string): Promise<{
     currency: row.currency,
     paymentStatus: row.payment_status as OrderPaymentStatus,
     fulfillmentStatus: row.fulfillment_status,
+    paidAt: row.paid_at,
   };
 }
 
@@ -219,12 +222,16 @@ export async function listPaymentsForOrder(orderId: string): Promise<
 export async function updateOrderPaymentStatus(
   orderId: string,
   paymentStatus: OrderPaymentStatus,
+  options?: { paidAt?: string },
 ): Promise<void> {
   const supabase = getSupabase();
-  const { error } = await supabase
-    .from("orders")
-    .update({ payment_status: paymentStatus })
-    .eq("id", orderId);
+  const patch: { payment_status: OrderPaymentStatus; paid_at?: string } = {
+    payment_status: paymentStatus,
+  };
+  if (options?.paidAt) {
+    patch.paid_at = options.paidAt;
+  }
+  const { error } = await supabase.from("orders").update(patch).eq("id", orderId);
 
   if (error) {
     throw error;

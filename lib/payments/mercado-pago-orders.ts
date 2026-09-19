@@ -1,7 +1,7 @@
 import "server-only";
 
 import { MercadoPagoConfig, Order } from "mercadopago";
-import { getMercadoPagoAccessToken, resolveOrderPayerFirstName } from "@/lib/payments/config";
+import { getMercadoPagoAccessToken } from "@/lib/payments/config";
 import type {
   CreateMercadoPagoOrderInput,
   MercadoPagoOrder,
@@ -10,7 +10,7 @@ import type {
 
 export type { MercadoPagoOrdersGateway };
 
-function buildCreateBody(input: CreateMercadoPagoOrderInput, accessToken: string) {
+function buildCreateBody(input: CreateMercadoPagoOrderInput) {
   const payment =
     input.payment.method === "pix"
       ? {
@@ -40,11 +40,7 @@ function buildCreateBody(input: CreateMercadoPagoOrderInput, accessToken: string
     description: input.description,
     payer: {
       email: input.payer.email,
-      first_name: resolveOrderPayerFirstName({
-        method: input.payment.method,
-        firstName: input.payer.firstName,
-        accessToken,
-      }),
+      first_name: input.payer.firstName,
       last_name: input.payer.lastName,
       identification: {
         type: "CPF",
@@ -85,7 +81,7 @@ export function createMercadoPagoOrdersGateway(
   return {
     async createOrder(input, idempotencyKey) {
       const created = await orders.create({
-        body: buildCreateBody(input, accessToken),
+        body: buildCreateBody(input),
         requestOptions: { idempotencyKey },
       });
       return created as MercadoPagoOrder;

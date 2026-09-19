@@ -5,21 +5,6 @@ export class MercadoPagoNotConfiguredError extends Error {
   }
 }
 
-export function isMercadoPagoTestAccessToken(token: string | null | undefined): boolean {
-  return (token ?? "").trim().startsWith("TEST-");
-}
-
-export function resolveOrderPayerFirstName(input: {
-  method: "pix" | "credit_card";
-  firstName: string;
-  accessToken: string;
-}): string {
-  if (input.method === "pix" && isMercadoPagoTestAccessToken(input.accessToken)) {
-    return "APRO";
-  }
-  return input.firstName;
-}
-
 export function getMercadoPagoAccessToken(
   env: NodeJS.Dict<string> = process.env,
 ): string {

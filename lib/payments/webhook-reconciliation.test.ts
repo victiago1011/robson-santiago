@@ -182,6 +182,7 @@ async function handle(
   getOrder: (id: string) => Promise<MercadoPagoOrder>,
   store: WebhookPaymentStore,
   getCalls: { count: number; ids: string[] },
+  ensureDigitalDeliveries: (orderId: string) => Promise<void> = async () => undefined,
 ) {
   return handleMercadoPagoWebhook(
     request,
@@ -199,6 +200,7 @@ async function handle(
         },
       }),
       store,
+      ensureDigitalDeliveries,
     },
   );
 }
@@ -446,6 +448,7 @@ test("Order fictícia 404 não corrompe o banco", async () => {
         },
       }),
       store,
+      ensureDigitalDeliveries: async () => undefined,
     },
   );
   assert.equal(result.code, "PROVIDER_ORDER_NOT_FOUND");
@@ -651,7 +654,7 @@ test("status desconhecido não aprova", async () => {
   assert.equal(mapProviderStatus("totally_unknown"), "pending");
 });
 
-test("webhook não altera fulfillment nem libera e-book", async () => {
+test("webhook não altera fulfillment_status", async () => {
   const { store, order, events } = mockStore();
   await handle(signedRequest(), async () => mpOrder(), store, { count: 0, ids: [] });
   assert.equal(order?.fulfillmentStatus, "pending");
@@ -659,6 +662,86 @@ test("webhook não altera fulfillment nem libera e-book", async () => {
     events.some((event) => String(event.type).includes("ebook") || String(event.type).includes("fulfill")),
     false,
   );
+});
+
+test("pedido approved dispara ensureDigitalDeliveries após reconciliação", async () => {
+  const { store, order } = mockStore();
+  const ensureCalls: string[] = [];
+  const result = await handle(
+    signedRequest(),
+    async () => mpOrder(),
+    store,
+    { count: 0, ids: [] },
+    async (orderId) => {
+      ensureCalls.push(orderId);
+    },
+  );
+  assert.equal(result.code, "RECONCILED");
+  assert.equal(order?.paymentStatus, "approved");
+  assert.equal(order?.fulfillmentStatus, "pending");
+  assert.deepEqual(ensureCalls, [ORDER_ID]);
+});
+
+test("webhook duplicado volta a chamar ensure com pedido já approved", async () => {
+  const { store, order } = mockStore();
+  const ensureCalls: string[] = [];
+  const ensure = async (orderId: string) => {
+    ensureCalls.push(orderId);
+  };
+  await handle(signedRequest(), async () => mpOrder(), store, { count: 0, ids: [] }, ensure);
+  await handle(signedRequest(), async () => mpOrder(), store, { count: 0, ids: [] }, ensure);
+  assert.equal(order?.paymentStatus, "approved");
+  assert.equal(order?.fulfillmentStatus, "pending");
+  assert.deepEqual(ensureCalls, [ORDER_ID, ORDER_ID]);
+});
+
+test("falha no ensure não desfaz reconciliação financeira e retorna 503", async () => {
+  const { store, order, events } = mockStore();
+  const result = await handle(
+    signedRequest(),
+    async () => mpOrder(),
+    store,
+    { count: 0, ids: [] },
+    async () => {
+      throw new Error("delivery_store_down");
+    },
+  );
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 503);
+  assert.equal(result.code, "DIGITAL_DELIVERY_FAILED");
+  assert.equal(order?.paymentStatus, "approved");
+  assert.equal(order?.paidAt, new Date(NOW).toISOString());
+  assert.equal(order?.fulfillmentStatus, "pending");
+  assert.equal(
+    events.some((event) => event.type === "payment_reconciled"),
+    true,
+  );
+  const serialized = JSON.stringify(result);
+  assert.equal(serialized.includes("delivery_store_down"), false);
+  assert.doesNotThrow(() => assertNoSensitiveFields(result));
+});
+
+test("pedido pending do provedor não chama ensureDigitalDeliveries", async () => {
+  const { store } = mockStore();
+  const ensureCalls: string[] = [];
+  await handle(
+    signedRequest(),
+    async () =>
+      mpOrder({
+        status: "action_required",
+        status_detail: "waiting_transfer",
+        total_paid_amount: null,
+        transactions: {
+          payments: [{ id: "PAY01ABC", status: "action_required", status_detail: "waiting_transfer" }],
+        },
+      }),
+    store,
+    { count: 0, ids: [] },
+    async (orderId) => {
+      ensureCalls.push(orderId);
+    },
+  );
+  assert.deepEqual(ensureCalls, []);
 });
 
 test("resposta pública não contém dados sensíveis", async () => {
@@ -714,6 +797,7 @@ test("erro temporário do provedor retorna 503 para retry", async () => {
         },
       }),
       store,
+      ensureDigitalDeliveries: async () => undefined,
     },
   );
   assert.equal(result.status, 503);
@@ -742,6 +826,7 @@ async function handleThrownProviderError(error: unknown, dataId = "123456") {
         },
       }),
       store,
+      ensureDigitalDeliveries: async () => undefined,
     },
   );
   return { result, getCalls, store, events, order, payments, fulfillment, paymentStatus, paymentSnapshot };

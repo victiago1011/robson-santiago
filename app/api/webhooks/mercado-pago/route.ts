@@ -8,6 +8,8 @@ import {
   updateOrderPaymentStatus,
   updatePaymentProviderResult,
 } from "@/lib/payments/store";
+import { ensureDigitalDeliveries } from "@/lib/digital-delivery/ensure";
+import { supabaseDigitalDeliveryStore } from "@/lib/digital-delivery/store";
 
 export async function POST(request: Request) {
   const result = await handleMercadoPagoWebhook(request, process.env, {
@@ -18,6 +20,9 @@ export async function POST(request: Request) {
       updatePayment: updatePaymentProviderResult,
       updateOrderPaymentStatus,
       insertEvent: insertOrderEvent,
+    },
+    ensureDigitalDeliveries: async (orderId) => {
+      await ensureDigitalDeliveries(orderId, supabaseDigitalDeliveryStore);
     },
   });
 

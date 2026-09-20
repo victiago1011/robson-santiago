@@ -27,6 +27,7 @@ export type WebhookHandleResult = {
 export type WebhookDependencies = {
   getMercadoPago: () => MercadoPagoOrdersGateway;
   store: WebhookPaymentStore;
+  ensureDigitalDeliveries: (orderId: string) => Promise<void>;
   now?: () => number;
 };
 
@@ -161,6 +162,16 @@ export async function handleMercadoPagoWebhook(
     }
 
     await persistReconciliation(deps.store, providerOrder, decision, now);
+
+    if (decision.nextOrderStatus === "approved") {
+      try {
+        await deps.ensureDigitalDeliveries(decision.order.id);
+      } catch {
+        console.error("digital_delivery_ensure_failed", { code: "DIGITAL_DELIVERY_FAILED" });
+        return { ok: false, code: "DIGITAL_DELIVERY_FAILED", status: 503, dataId };
+      }
+    }
+
     return { ok: true, code: "RECONCILED", status: 200, dataId };
   } catch {
     console.error("webhook_store_unavailable", { code: "WEBHOOK_STORE_UNAVAILABLE" });

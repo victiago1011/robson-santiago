@@ -167,7 +167,7 @@ export async function handleMercadoPagoWebhook(
       try {
         await deps.ensureDigitalDeliveries(decision.order.id);
       } catch {
-        console.error("digital_delivery_ensure_failed", { code: "DIGITAL_DELIVERY_FAILED" });
+        console.error("digital_delivery_fulfill_failed", { code: "DIGITAL_DELIVERY_FAILED" });
         return { ok: false, code: "DIGITAL_DELIVERY_FAILED", status: 503, dataId };
       }
     }

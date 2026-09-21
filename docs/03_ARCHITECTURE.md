@@ -129,21 +129,20 @@ Não criar todas antecipadamente. Implementar conforme aprovação.
 
 ## Integrações
 
-Aprovado nesta fase (catálogo, cotação e estrutura de pedidos; sem pagamento ativo):
+Aprovado nesta fase:
 
-- Supabase / PostgreSQL para catálogo, configuração de frete/bump e pedidos;
+- Supabase / PostgreSQL para catálogo, configuração de frete/bump, pedidos e autorizações de entrega digital;
 - cliente server-side com `SUPABASE_URL` e `SUPABASE_SECRET_KEY` (`lib/supabase/server.ts`); essas variáveis são somente servidor e não usam prefixo `NEXT_PUBLIC_`;
-- Route Handlers `GET /api/products/[sku]`, `POST /api/checkout/quote` e `POST /api/orders`.
+- Route Handlers de comércio, `POST /api/webhooks/mercado-pago` e `GET /api/ebook/download/[token]` para o PDF;
+- Mercado Pago (Payment Brick + Orders API + webhook);
+- Resend para o e-mail transacional de entrega do e-book (`RESEND_API_KEY`, `RESEND_FROM` opcional, `APP_URL`). O PDF **não** é anexo. O e-mail contém só o link da aplicação.
 
 Ainda **não** fazem parte da arquitetura em uso:
 
-- Mercado Pago / Payment Brick / webhooks;
 - autenticação de admin;
 - CMS;
-- Resend / e-mail transacional;
 - newsletter;
-- analytics específico;
-- armazenamento ou download do PDF do e-book.
+- analytics específico.
 
 ### Comércio
 
@@ -186,9 +185,9 @@ Tentativas de pagamento ficam em `payments` (histórico). Eventos em `order_even
 
 RLS está ligado nas tabelas comerciais **sem** políticas para `anon`/`authenticated`. O App Router acessa o banco só com `SUPABASE_SECRET_KEY` no servidor. Catálogo público, quando existir, passa pela nossa API — não por SELECT anônimo no Supabase.
 
-Checkout visual em `/livro/comprar?opcao=fisico|ebook`. Order bump do e-book aparece só no checkout físico. O botão final permanece desabilitado. Mercado Pago ainda inexistente.
+Checkout visual em `/livro/comprar?opcao=fisico|ebook`. Order bump do e-book aparece só no checkout físico. Pagamento via Mercado Pago. `POST /api/webhooks/mercado-pago` reconcilia o pedido; só `payment_status = approved` dispara a orquestração digital (`ensureDigitalDeliveries` → claim → Resend → persistir provider acceptance → `sent`). `rejected`, `cancelled` e `refunded` não enviam o e-mail. `fulfillment_status` permanece independente do pagamento e da entrega digital.
 
-PDF do e-book: o arquivo existe fora do repositório. Posteriormente será associado a `AVIDA-EBOOK` em bucket privado do Supabase Storage, com download só após `payment_status = approved` via URL assinada temporária. Nenhum caminho de arquivo é persistido nesta fase.
+PDF do e-book: o arquivo fica no bucket **privado** `ebooks` do Supabase Storage (objeto `a-vida-e-um-dia-ebook.pdf`). Não há policy pública nem URL permanente. O comprador baixa só por `GET /api/ebook/download/[token]` na aplicação. A autorização exige `payment_status = approved`, token cujo SHA-256 bata com `token_hash` (o token bruto nunca é persistido), prazo de 30 dias a partir de `digital_deliveries.created_at`, e registro não revogado. O e-mail Resend aponta para `${APP_URL}/api/ebook/download/${token}` — nunca para signed URL do Storage. Se o Resend aceitar o envio e `markSent` falhar, `email_provider_accepted_at` impede reclaim stale, rotação de token e segundo e-mail; um webhook posterior só reconcilia para `sent`.
 
 A migration em `supabase/migrations/` precisa ser aplicada manualmente no projeto Supabase. Não assume ambiente já provisionado. Não editar a migration já aplicada; novas mudanças entram em arquivos novos.
 

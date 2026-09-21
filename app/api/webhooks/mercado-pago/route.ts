@@ -8,7 +8,7 @@ import {
   updateOrderPaymentStatus,
   updatePaymentProviderResult,
 } from "@/lib/payments/store";
-import { ensureDigitalDeliveries } from "@/lib/digital-delivery/ensure";
+import { fulfillApprovedOrderDigitalDeliveries } from "@/lib/digital-delivery/fulfill-approved-order";
 import { supabaseDigitalDeliveryStore } from "@/lib/digital-delivery/store";
 
 export async function POST(request: Request) {
@@ -22,7 +22,13 @@ export async function POST(request: Request) {
       insertEvent: insertOrderEvent,
     },
     ensureDigitalDeliveries: async (orderId) => {
-      await ensureDigitalDeliveries(orderId, supabaseDigitalDeliveryStore);
+      const result = await fulfillApprovedOrderDigitalDeliveries(
+        orderId,
+        supabaseDigitalDeliveryStore,
+      );
+      if (result.needsRetry) {
+        throw new Error("DIGITAL_DELIVERY_RETRY");
+      }
     },
   });
 

@@ -1,16 +1,17 @@
 "use client";
 
 import { initMercadoPago, Payment } from "@mercadopago/sdk-react";
-import { useEffect, useRef } from "react";
-import { centsToBrickAmount } from "@/lib/payments/amount";
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import {
+  createPaymentBrickInitialization,
+  PAYMENT_BRICK_CUSTOMIZATION,
+} from "@/lib/payments/payment-brick-ui";
 import { mapBrickFormToPayment } from "@/lib/payments/map-brick-form";
 import type { CheckoutPaymentMethod } from "@/lib/payments/schemas";
 
 type MercadoPagoPaymentBrickProps = {
   publicKey: string;
   amountCents: number;
-  payerEmail?: string;
-  payerDocument?: string;
   disabled?: boolean;
   onReady: () => void;
   onSubmitPayment: (payment: CheckoutPaymentMethod) => Promise<void>;
@@ -20,20 +21,40 @@ type MercadoPagoPaymentBrickProps = {
 export default function MercadoPagoPaymentBrick({
   publicKey,
   amountCents,
-  payerEmail,
-  payerDocument,
   disabled = false,
   onReady,
   onSubmitPayment,
   onError,
 }: MercadoPagoPaymentBrickProps) {
-  const initialized = useRef(false);
+  const onReadyRef = useRef(onReady);
+  const onErrorRef = useRef(onError);
+  const onSubmitPaymentRef = useRef(onSubmitPayment);
+  onReadyRef.current = onReady;
+  onErrorRef.current = onError;
+  onSubmitPaymentRef.current = onSubmitPayment;
+
+  const initialization = useMemo(
+    () => createPaymentBrickInitialization(amountCents),
+    [amountCents],
+  );
+
+  const handleReady = useCallback(() => {
+    onReadyRef.current();
+  }, []);
+
+  const handleError = useCallback(() => {
+    onErrorRef.current();
+  }, []);
+
+  const handleSubmit = useCallback(async (form: unknown) => {
+    const payment = mapBrickFormToPayment(form as Parameters<typeof mapBrickFormToPayment>[0]);
+    if (!payment) {
+      throw new Error("UNSUPPORTED_PAYMENT_METHOD");
+    }
+    await onSubmitPaymentRef.current(payment);
+  }, []);
 
   useEffect(() => {
-    if (initialized.current) {
-      return;
-    }
-    initialized.current = true;
     initMercadoPago(publicKey, { locale: "pt-BR" });
   }, [publicKey]);
 
@@ -41,41 +62,11 @@ export default function MercadoPagoPaymentBrick({
     <div className={disabled ? "pointer-events-none opacity-50" : undefined}>
       <Payment
         locale="pt"
-        initialization={{
-          amount: centsToBrickAmount(amountCents),
-          payer: {
-            email: payerEmail,
-            identification: payerDocument
-              ? {
-                  type: "CPF",
-                  number: payerDocument,
-                }
-              : undefined,
-          },
-        }}
-        customization={{
-          paymentMethods: {
-            creditCard: "all",
-            bankTransfer: ["pix"],
-            maxInstallments: 12,
-          } as never,
-          visual: {
-            style: {
-              theme: "default",
-            },
-          },
-        }}
-        onReady={onReady}
-        onError={() => {
-          onError();
-        }}
-        onSubmit={async (form) => {
-          const payment = mapBrickFormToPayment(form);
-          if (!payment) {
-            throw new Error("UNSUPPORTED_PAYMENT_METHOD");
-          }
-          await onSubmitPayment(payment);
-        }}
+        initialization={initialization}
+        customization={PAYMENT_BRICK_CUSTOMIZATION as never}
+        onReady={handleReady}
+        onError={handleError}
+        onSubmit={handleSubmit}
       />
     </div>
   );

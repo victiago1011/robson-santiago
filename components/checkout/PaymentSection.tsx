@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import PixAwaiting from "@/components/checkout/PixAwaiting";
+import { paymentBrickInstanceKey } from "@/lib/payments/payment-brick-ui";
 import type { CheckoutPaymentMethod } from "@/lib/payments/schemas";
 import type { PublicPaymentResult } from "@/lib/payments/types";
 
@@ -25,8 +26,6 @@ type PaymentSectionProps = {
   publicKey: string | null;
   amountCents: number | null;
   quoting: boolean;
-  payerEmail: string;
-  payerDocument: string;
   uiState: CheckoutPaymentUiState;
   payment: PublicPaymentResult | null;
   message: string | null;
@@ -39,8 +38,6 @@ export default function PaymentSection({
   publicKey,
   amountCents,
   quoting,
-  payerEmail,
-  payerDocument,
   uiState,
   payment,
   message,
@@ -61,7 +58,7 @@ export default function PaymentSection({
         Pagamento
       </h2>
       <p className="mt-3 font-sans text-sm leading-relaxed text-ink-soft">
-        Ambiente de teste. Pix ou cartão de crédito. Nenhuma cobrança real será feita nesta fase.
+        Escolha Pix ou cartão de crédito para concluir a compra.
       </p>
 
       <div className="mt-8">
@@ -73,17 +70,15 @@ export default function PaymentSection({
           <PixAwaiting qrCode={payment.pix.qrCode} qrCodeBase64={payment.pix.qrCodeBase64} />
         ) : uiState === "approved" ? (
           <p className="font-sans text-sm text-ink">
-            Pagamento aprovado em ambiente de teste. O pedido permanece pendente até a confirmação do Mercado Pago.
+            Pagamento aprovado. A confirmação definitiva chega após a notificação do Mercado Pago.
           </p>
         ) : (
           <>
             {showBrick ? (
               <MercadoPagoPaymentBrick
-                key={amountCents}
+                key={paymentBrickInstanceKey({ amountCents })}
                 publicKey={publicKey}
                 amountCents={amountCents}
-                payerEmail={payerEmail || undefined}
-                payerDocument={payerDocument || undefined}
                 disabled={uiState === "processing"}
                 onReady={onBrickReady}
                 onSubmitPayment={onSubmitPayment}

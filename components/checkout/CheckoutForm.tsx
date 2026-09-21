@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import CustomerFields from "@/components/checkout/CustomerFields";
 import OrderSummary from "@/components/checkout/OrderSummary";
 import PaymentSection, {
@@ -72,8 +72,6 @@ export default function CheckoutForm({
   );
   const [ebookBump, setEbookBump] = useState(false);
   const [remote, setRemote] = useState<RemoteQuoteState | null>(null);
-  const [payerEmail, setPayerEmail] = useState("");
-  const [payerDocument, setPayerDocument] = useState("");
   const [uiState, setUiState] = useState<CheckoutPaymentUiState>(
     mercadoPagoPublicKey ? "loading" : "error",
   );
@@ -145,7 +143,7 @@ export default function CheckoutForm({
 
   const requiresShipping = kind !== "digital";
 
-  const submitPayment = async (method: CheckoutPaymentMethod) => {
+  const submitPayment = useCallback(async (method: CheckoutPaymentMethod) => {
     if (processingRef.current) {
       return;
     }
@@ -227,7 +225,18 @@ export default function CheckoutForm({
     } finally {
       processingRef.current = false;
     }
-  };
+  }, [kind, quantity, ebookBump]);
+
+  const handleBrickReady = useCallback(() => {
+    if (!processingRef.current) {
+      setUiState((current) => (current === "loading" ? "ready" : current));
+    }
+  }, []);
+
+  const handleBrickError = useCallback(() => {
+    setUiState("error");
+    setMessage("Não foi possível carregar os meios de pagamento.");
+  }, []);
 
   return (
     <form
@@ -241,10 +250,7 @@ export default function CheckoutForm({
       {kind === "physical" ? <input type="hidden" name="ebook_bump" value={ebookBump ? "true" : "false"} /> : null}
 
       <div className="flex min-w-0 flex-col gap-12 md:col-span-7">
-        <CustomerFields
-          onEmailChange={setPayerEmail}
-          onDocumentChange={setPayerDocument}
-        />
+        <CustomerFields />
         {requiresShipping ? <ShippingFields /> : null}
         {kind === "digital" ? (
           <p className="font-sans text-sm leading-relaxed text-ink-soft">
@@ -255,21 +261,12 @@ export default function CheckoutForm({
           publicKey={mercadoPagoPublicKey}
           amountCents={quote?.totalCents ?? null}
           quoting={quoting}
-          payerEmail={payerEmail}
-          payerDocument={payerDocument}
           uiState={uiState}
           payment={payment}
           message={message}
-          onBrickReady={() => {
-            if (!processingRef.current) {
-              setUiState((current) => (current === "loading" ? "ready" : current));
-            }
-          }}
+          onBrickReady={handleBrickReady}
           onSubmitPayment={submitPayment}
-          onBrickError={() => {
-            setUiState("error");
-            setMessage("Não foi possível carregar os meios de pagamento.");
-          }}
+          onBrickError={handleBrickError}
         />
       </div>
 

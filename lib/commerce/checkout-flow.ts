@@ -4,7 +4,30 @@ import {
 } from "@/lib/commerce/checkout-field-errors";
 import type { CheckoutPaymentUiState } from "@/lib/payments/pix-status-polling";
 
+export const CHECKOUT_DATA_REVIEW_MESSAGE = "Revise os dados preenchidos e tente novamente.";
+
 export type CheckoutStep = "details" | "payment";
+
+export function decideCheckoutValidationFailure(errors: CheckoutFieldErrors): {
+  step: "details";
+  notice: string | null;
+} {
+  return {
+    step: "details",
+    notice: firstInvalidCheckoutField(errors) ? null : CHECKOUT_DATA_REVIEW_MESSAGE,
+  };
+}
+
+export function checkoutStepAfterPayResponse(input: {
+  ok: boolean;
+  code?: string;
+  paymentStatus?: string | null;
+}): CheckoutStep {
+  if (!input.ok && input.code === "VALIDATION_ERROR") {
+    return "details";
+  }
+  return "payment";
+}
 
 export function shouldMountPaymentSection(step: CheckoutStep): boolean {
   return step === "payment";

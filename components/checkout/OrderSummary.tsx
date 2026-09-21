@@ -1,8 +1,9 @@
 "use client";
 
 import EbookBumpOffer from "@/components/checkout/EbookBumpOffer";
-import { DIGITAL_BOOK, PHYSICAL_BOOK } from "@/lib/commerce/product";
 import { formatBRLFromCents } from "@/lib/commerce/money";
+import { orderSummaryPricing } from "@/lib/commerce/order-summary-pricing";
+import { DIGITAL_BOOK, PHYSICAL_BOOK } from "@/lib/commerce/product";
 import type { PublicQuote } from "@/lib/commerce/quote";
 
 type OrderSummaryProps = {
@@ -37,7 +38,7 @@ export default function OrderSummary({
 }: OrderSummaryProps) {
   const decreaseDisabled = quantity <= PHYSICAL_BOOK.minQuantity;
   const increaseDisabled = quantity >= PHYSICAL_BOOK.maxQuantity;
-  const showDiscount = (quote?.discountCents ?? 0) > 0;
+  const pricing = orderSummaryPricing(quote);
   const physicalItem = quote?.items.find((item) => item.type === "physical");
   const digitalItem = quote?.items.find((item) => item.type === "digital");
   const showPhysical = Boolean(physicalItem) || quantityEditable;
@@ -132,10 +133,16 @@ export default function OrderSummary({
         <div className="flex items-baseline justify-between gap-4 border-t border-rule py-6">
           <div className="min-w-0">
             <p className="font-sans text-base text-ink">{digitalItem?.title ?? DIGITAL_BOOK.title}</p>
-            <p className="mt-1 font-sans text-sm text-ink-soft">Order bump · 1 unidade</p>
+            <p className="mt-1 font-sans text-sm text-ink-soft">
+              {pricing.mode === "combo_net" ? "Oferta com o livro" : "Order bump · 1 unidade"}
+            </p>
           </div>
           <p className="shrink-0 font-display text-base italic text-ink">
-            {digitalItem ? formatBRLFromCents(digitalItem.lineTotalCents) : "—"}
+            {pricing.mode === "combo_net"
+              ? formatBRLFromCents(pricing.ebookNetCents)
+              : digitalItem
+                ? formatBRLFromCents(digitalItem.lineTotalCents)
+                : "—"}
           </p>
         </div>
       ) : null}
@@ -143,13 +150,15 @@ export default function OrderSummary({
       <dl
         className={`space-y-3 border-t border-rule pt-6 font-sans text-sm text-ink ${quoting ? "opacity-70" : ""}`}
       >
-        <div className="flex items-baseline justify-between gap-4">
-          <dt className="text-ink-soft">Subtotal</dt>
-          <dd className="font-display text-base italic text-ink">
-            {quote ? formatBRLFromCents(quote.subtotalCents) : "—"}
-          </dd>
-        </div>
-        {showDiscount && quote ? (
+        {pricing.showSubtotal ? (
+          <div className="flex items-baseline justify-between gap-4">
+            <dt className="text-ink-soft">Subtotal</dt>
+            <dd className="font-display text-base italic text-ink">
+              {quote ? formatBRLFromCents(quote.subtotalCents) : "—"}
+            </dd>
+          </div>
+        ) : null}
+        {pricing.showEbookDiscount && quote ? (
           <div className="flex items-baseline justify-between gap-4">
             <dt className="text-ink-soft">Desconto e-book</dt>
             <dd className="font-display text-base italic text-ink">

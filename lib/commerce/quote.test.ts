@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { calculateQuoteFromCatalog, type CommerceCatalogSnapshot } from "./quote";
+import { orderSummaryPricing } from "./order-summary-pricing";
+import { calculateQuoteFromCatalog, toPublicQuote, type CommerceCatalogSnapshot } from "./quote";
 import { createOrderSchema, purchaseSelectionSchema } from "./schemas";
 
 function catalog(overrides?: {
@@ -238,4 +239,43 @@ test("catálogo inativo impede persistência", () => {
     catalog({ physicalActive: true, digitalActive: true }),
   );
   assert.equal(active.purchasable, true);
+});
+
+test("resumo do combo usa o preço líquido do bump e o avulso permanece cheio", () => {
+  const combo = calculateQuoteFromCatalog(
+    { kind: "physical", quantity: 1, ebookBump: true },
+    catalog(),
+  );
+  const pricing = orderSummaryPricing(combo);
+  assert.equal(pricing.mode, "combo_net");
+  if (pricing.mode !== "combo_net") {
+    return;
+  }
+  assert.equal(pricing.ebookNetCents, combo.ebookBumpPriceCents);
+  assert.equal(pricing.showSubtotal, false);
+  assert.equal(pricing.showEbookDiscount, false);
+
+  const physical = combo.items.find((item) => item.type === "physical");
+  const digital = combo.items.find((item) => item.type === "digital");
+  assert.ok(physical);
+  assert.ok(digital);
+  assert.equal(physical.lineTotalCents + pricing.ebookNetCents + combo.shippingCents, combo.totalCents);
+  assert.equal(combo.totalCents, 6490);
+  assert.notEqual(pricing.ebookNetCents, digital.lineTotalCents);
+
+  const digitalOnly = calculateQuoteFromCatalog({ kind: "digital" }, catalog());
+  const standalone = orderSummaryPricing(digitalOnly);
+  assert.equal(standalone.mode, "standard");
+  assert.equal(standalone.showSubtotal, true);
+  assert.equal(standalone.showEbookDiscount, false);
+  assert.equal(digitalOnly.items[0]?.lineTotalCents, 1990);
+  assert.equal(digitalOnly.totalCents, 1990);
+
+  const mismatched = toPublicQuote(combo);
+  mismatched.discountCents = 1;
+  const fallback = orderSummaryPricing(mismatched);
+  assert.equal(fallback.mode, "standard");
+  assert.equal(fallback.showSubtotal, true);
+  assert.equal(fallback.showEbookDiscount, true);
+  assert.equal(combo.totalCents, 6490);
 });

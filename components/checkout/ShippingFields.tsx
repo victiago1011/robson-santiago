@@ -57,6 +57,9 @@ export default function ShippingFields({ errors = {}, onClearField }: ShippingFi
             name="shipping_complement"
             label="Complemento"
             autoComplete="address-line2"
+            maxLength={80}
+            error={errors.shipping_complement}
+            onInput={() => onClearField?.("shipping_complement")}
           />
         </div>
         <div className="sm:col-span-6">

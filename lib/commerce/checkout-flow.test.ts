@@ -6,10 +6,14 @@ import {
   canAdvanceToPayment,
   canAlterCheckoutOrder,
   canEditCheckoutSelection,
+  CHECKOUT_DATA_REVIEW_MESSAGE,
+  checkoutStepAfterPayResponse,
+  decideCheckoutValidationFailure,
   displayedCheckoutOrder,
   isCheckoutOrderFrozen,
   shouldMountPaymentSection,
 } from "@/lib/commerce/checkout-flow";
+import { checkoutFieldErrors } from "@/lib/commerce/checkout-field-errors";
 import { checkoutReviewFromFields } from "@/lib/commerce/checkout-review";
 
 const quote = { totalCents: 5490 };
@@ -161,4 +165,49 @@ test("o checkout liga as etapas sem segundo Brick e sem girar a tentativa ao vol
   assert.match(form, /setFrozenOrder\(\(current\) => current \?\? snapshot\)/);
   assert.match(form, /Continuar para pagamento/);
   assert.match(form, /Alterar dados ou pedido/);
+});
+
+test("VALIDATION_ERROR volta aos dados e rejected real permanece no pagamento", () => {
+  const invalidDocument = checkoutFieldErrors({
+    kind: "digital",
+    customer: {
+      name: "Ana Souza",
+      email: "ana@example.com",
+      phone: "11999999999",
+      document: "11111111111",
+    },
+  });
+  const validation = decideCheckoutValidationFailure(invalidDocument);
+  assert.equal(validation.step, "details");
+  assert.equal(validation.notice, null);
+  assert.equal(invalidDocument.customer_document, "Informe um CPF válido.");
+  assert.equal(checkoutStepAfterPayResponse({ ok: false, code: "VALIDATION_ERROR" }), "details");
+
+  const withoutField = decideCheckoutValidationFailure({});
+  assert.equal(withoutField.step, "details");
+  assert.equal(withoutField.notice, CHECKOUT_DATA_REVIEW_MESSAGE);
+
+  assert.equal(
+    checkoutStepAfterPayResponse({ ok: true, paymentStatus: "rejected" }),
+    "payment",
+  );
+  assert.equal(
+    checkoutStepAfterPayResponse({ ok: true, paymentStatus: "cancelled" }),
+    "payment",
+  );
+  assert.equal(checkoutStepAfterPayResponse({ ok: false, code: "PAYMENT_FAILED" }), "payment");
+
+  const form = readFileSync(join(process.cwd(), "components/checkout/CheckoutForm.tsx"), "utf8");
+  const validationBranch = form.match(
+    /if \(code === "VALIDATION_ERROR"\) \{\n        const currentFields[\s\S]*?throw new BrickSubmitRejected\(\);\n      \}/,
+  );
+  assert.ok(validationBranch);
+  assert.match(validationBranch[0], /setStep\(failure\.step\)/);
+  assert.match(validationBranch[0], /setFieldErrors\(errors\)/);
+  assert.match(validationBranch[0], /setDetailsNotice\(failure\.notice\)/);
+  assert.equal(validationBranch[0].includes("setFrozenOrder"), false);
+  assert.equal(validationBranch[0].includes("setPayment"), false);
+  assert.equal(validationBranch[0].includes("form.reset"), false);
+  assert.match(form, /hidden=\{step === "payment"\}/);
+  assert.match(form, /setUiState\("rejected"\)/);
 });

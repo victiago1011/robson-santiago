@@ -209,7 +209,10 @@ export async function startCheckoutPayment(
       }
       const providerStatus =
         typeof error === "object" && error && "status" in error ? Number(error.status) : null;
-      if (providerStatus === 400 || providerStatus === 402) {
+      if (providerStatus === 400) {
+        return { ok: false, code: "VALIDATION_ERROR", status: 400 };
+      }
+      if (providerStatus === 402) {
         await deps.store.updatePayment({
           paymentId,
           providerOrderId: null,

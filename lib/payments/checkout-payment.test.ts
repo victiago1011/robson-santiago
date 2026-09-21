@@ -337,6 +337,69 @@ test("API pública de pagamento não devolve dados sensíveis", async () => {
   assert.equal(JSON.stringify(result).includes(customer.email), false);
 });
 
+test("HTTP 400 do provider é VALIDATION_ERROR e não vira rejected", async () => {
+  const deps = mockDeps();
+  deps.mercadoPago.createOrder = async () => {
+    throw Object.assign(new Error("cpf_invalid_raw"), {
+      status: 400,
+      cause: "property_value",
+      status_detail: "invalid_document",
+    });
+  };
+
+  const parsed = checkoutPaySchema.parse(physicalPayload());
+  const result = await startCheckoutPayment(parsed, deps);
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.code, "VALIDATION_ERROR");
+    assert.equal(result.status, 400);
+  }
+  const body = JSON.stringify(result);
+  assert.equal(body.includes("cpf_invalid_raw"), false);
+  assert.equal(body.includes("property_value"), false);
+  assert.equal(body.includes("invalid_document"), false);
+  assert.equal(body.includes('"status":"rejected"'), false);
+
+  const replay = await startCheckoutPayment(parsed, deps);
+  assert.equal(replay.ok, false);
+  if (!replay.ok) {
+    assert.equal(replay.code, "VALIDATION_ERROR");
+    assert.equal(replay.status, 400);
+  }
+});
+
+test("HTTP 402 do provider continua rejeição real", async () => {
+  const deps = mockDeps();
+  deps.mercadoPago.createOrder = async () => {
+    throw Object.assign(new Error("transaction_failed"), { status: 402 });
+  };
+
+  const result = await startCheckoutPayment(checkoutPaySchema.parse(physicalPayload()), deps);
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.equal(result.payment.status, "rejected");
+  }
+});
+
+test("status rejected do provider continua rejeição real", async () => {
+  const deps = mockDeps({
+    mpOrder: {
+      id: "ORDREJECT1",
+      status: "rejected",
+      transactions: {
+        payments: [{ id: "PAYREJECT1", status: "rejected", status_detail: "cc_rejected_other_reason" }],
+      },
+    },
+  });
+
+  const result = await startCheckoutPayment(checkoutPaySchema.parse(physicalPayload()), deps);
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.equal(result.payment.status, "rejected");
+    assert.equal(result.payment.pix, null);
+  }
+});
+
 test("decidePaymentAttemptAction reutiliza chave da mesma tentativa", () => {
   const pending: ExistingPaymentAttempt = {
     id: "p1",

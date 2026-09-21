@@ -10,6 +10,7 @@ import {
   canAdvanceToPayment,
   canAlterCheckoutOrder,
   canEditCheckoutSelection,
+  decideCheckoutValidationFailure,
   displayedCheckoutOrder,
   isCheckoutOrderFrozen,
   shouldMountPaymentSection,
@@ -104,6 +105,7 @@ export default function CheckoutForm({
 
   const [step, setStep] = useState<CheckoutStep>("details");
   const [fieldErrors, setFieldErrors] = useState<CheckoutFieldErrors>({});
+  const [detailsNotice, setDetailsNotice] = useState<string | null>(null);
   const [review, setReview] = useState<CheckoutReviewData | null>(null);
   const [quantity, setQuantity] = useState<number>(
     kind === "physical" ? PHYSICAL_BOOK.minQuantity : 1,
@@ -226,6 +228,7 @@ export default function CheckoutForm({
       customer: fields.customer,
       shipping: fields.shipping,
     });
+    setDetailsNotice(null);
     setFieldErrors(errors);
 
     if (!canAdvanceToPayment({ quoting, amountCents, errors })) {
@@ -349,6 +352,31 @@ export default function CheckoutForm({
 
       const code =
         typeof data === "object" && data !== null && "code" in data ? String(data.code) : undefined;
+      if (code === "VALIDATION_ERROR") {
+        const currentFields = readCheckoutFields(form);
+        const errors = checkoutFieldErrors({
+          kind,
+          ebookBump,
+          customer: currentFields.customer,
+          shipping: currentFields.shipping,
+        });
+        const failure = decideCheckoutValidationFailure(errors);
+        paymentAttemptIdRef.current = newPaymentAttemptId();
+        setFieldErrors(errors);
+        setDetailsNotice(failure.notice);
+        setMessage(null);
+        setUiState("ready");
+        setStep(failure.step);
+        const first = firstInvalidCheckoutField(errors);
+        if (first) {
+          requestAnimationFrame(() => {
+            const field = document.getElementById(first);
+            field?.focus();
+            field?.scrollIntoView({ behavior: "smooth", block: "center" });
+          });
+        }
+        throw new BrickSubmitRejected();
+      }
       paymentAttemptIdRef.current = newPaymentAttemptId();
       setUiState("error");
       setMessage(userFacingPaymentMessage(code));
@@ -433,6 +461,11 @@ export default function CheckoutForm({
       <div className="flex min-w-0 flex-col gap-12 md:col-span-7">
         <div hidden={step === "payment"}>
           <div className="flex flex-col gap-12">
+            {detailsNotice ? (
+              <p role="alert" className="font-sans text-sm leading-relaxed text-[#8f2d2d]">
+                {detailsNotice}
+              </p>
+            ) : null}
             <CustomerFields errors={fieldErrors} onClearField={clearFieldError} />
             {requiresShipping ? (
               <ShippingFields errors={fieldErrors} onClearField={clearFieldError} />

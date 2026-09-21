@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { BRAZILIAN_STATES } from "./address";
-import { isBasicCpfFormat, normalizeCpf } from "./cpf";
+import { isValidCpf, normalizeCpf } from "./cpf";
 import { PHYSICAL_QUANTITY } from "./selection";
 
 const trimmed = (max: number) => z.string().trim().min(1).max(max);
@@ -14,7 +14,7 @@ export const customerSchema = z.object({
     .trim()
     .min(1)
     .max(20)
-    .refine(isBasicCpfFormat, "CPF_INVALID")
+    .refine(isValidCpf, "CPF_INVALID")
     .transform(normalizeCpf),
 });
 

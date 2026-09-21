@@ -29,7 +29,7 @@ const validCustomer: CheckoutCustomerInput = {
   name: "Ana Souza",
   email: "ana@example.com",
   phone: "abc",
-  document: "11111111111",
+  document: "52998224725",
 };
 
 const validShipping: CheckoutShippingInput = {
@@ -75,7 +75,8 @@ test("físico com campos vazios exige comprador e endereço, sem complemento", (
   assert.equal("shipping_complement" in errors, false);
 
   let remaining: CheckoutFieldErrors = { ...errors };
-  for (const id of CHECKOUT_FIELD_ORDER) {
+  const requiredOrder = CHECKOUT_FIELD_ORDER.filter((id) => id !== "shipping_complement");
+  for (const id of requiredOrder) {
     assert.equal(firstInvalidCheckoutField(remaining), id);
     delete remaining[id];
   }
@@ -119,8 +120,8 @@ test("complemento vazio ou ausente continua válido", () => {
   );
 });
 
-test("CPF segue só a regra atual de 11 dígitos", () => {
-  for (const document of ["11111111111", "111.111.111-11", "12345678901"]) {
+test("CPF válido é aceito e CPF inválido marca o documento", () => {
+  for (const document of ["52998224725", "529.982.247-25"]) {
     assert.deepEqual(
       checkoutFieldErrors({
         kind: "digital",
@@ -131,12 +132,34 @@ test("CPF segue só a regra atual de 11 dígitos", () => {
     );
   }
 
+  for (const document of ["52998224726", "11111111111", "00000000000", "1234567890", "529982247251"]) {
+    assert.equal(
+      checkoutFieldErrors({
+        kind: "digital",
+        customer: { ...validCustomer, document },
+      }).customer_document,
+      "Informe um CPF válido.",
+      document,
+    );
+  }
+});
+
+test("complemento vazio ou com 80 caracteres é válido e 81 marca o campo", () => {
+  assert.deepEqual(
+    checkoutFieldErrors({
+      kind: "physical",
+      customer: validCustomer,
+      shipping: { ...validShipping, complement: "A".repeat(80) },
+    }),
+    {},
+  );
   assert.equal(
     checkoutFieldErrors({
-      kind: "digital",
-      customer: { ...validCustomer, document: "1234567890" },
-    }).customer_document,
-    "Informe um CPF válido.",
+      kind: "physical",
+      customer: validCustomer,
+      shipping: { ...validShipping, complement: "A".repeat(81) },
+    }).shipping_complement,
+    "Use no máximo 80 caracteres.",
   );
 });
 

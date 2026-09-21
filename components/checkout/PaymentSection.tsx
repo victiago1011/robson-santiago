@@ -1,10 +1,18 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import PaymentApproved from "@/components/checkout/PaymentApproved";
 import PixAwaiting from "@/components/checkout/PixAwaiting";
 import { paymentBrickInstanceKey } from "@/lib/payments/payment-brick-ui";
+import {
+  checkoutShowsPixAwaiting,
+  PIX_POLL_TIMEOUT_MESSAGE,
+  PIX_REFUNDED_MESSAGE,
+  type CheckoutPaymentUiState,
+} from "@/lib/payments/pix-status-polling";
 import type { CheckoutPaymentMethod } from "@/lib/payments/schemas";
 import type { PublicPaymentResult } from "@/lib/payments/types";
+import type { PurchaseKind } from "@/lib/commerce/selection";
 
 const MercadoPagoPaymentBrick = dynamic(() => import("./MercadoPagoPaymentBrick"), {
   ssr: false,
@@ -13,34 +21,31 @@ const MercadoPagoPaymentBrick = dynamic(() => import("./MercadoPagoPaymentBrick"
   ),
 });
 
-export type CheckoutPaymentUiState =
-  | "loading"
-  | "ready"
-  | "processing"
-  | "awaiting_pix"
-  | "approved"
-  | "rejected"
-  | "error";
+export type { CheckoutPaymentUiState };
 
 type PaymentSectionProps = {
+  kind: PurchaseKind;
   publicKey: string | null;
   amountCents: number | null;
   quoting: boolean;
   uiState: CheckoutPaymentUiState;
   payment: PublicPaymentResult | null;
   message: string | null;
+  pixPollTimedOut?: boolean;
   onBrickReady: () => void;
   onSubmitPayment: (payment: CheckoutPaymentMethod) => Promise<void>;
   onBrickError: () => void;
 };
 
 export default function PaymentSection({
+  kind,
   publicKey,
   amountCents,
   quoting,
   uiState,
   payment,
   message,
+  pixPollTimedOut = false,
   onBrickReady,
   onSubmitPayment,
   onBrickError,
@@ -51,6 +56,7 @@ export default function PaymentSection({
     amountCents > 0 &&
     !quoting &&
     (uiState === "loading" || uiState === "ready" || uiState === "processing" || uiState === "rejected" || uiState === "error");
+  const showPix = checkoutShowsPixAwaiting(uiState) && Boolean(payment?.pix);
 
   return (
     <section aria-labelledby="pagamento-heading" className="min-w-0">
@@ -66,12 +72,16 @@ export default function PaymentSection({
           <p className="font-sans text-sm text-ink">Não foi possível carregar os meios de pagamento.</p>
         ) : quoting || !amountCents ? (
           <p className="font-sans text-sm text-ink-soft">Carregando meios de pagamento...</p>
-        ) : uiState === "awaiting_pix" && payment?.pix ? (
-          <PixAwaiting qrCode={payment.pix.qrCode} qrCodeBase64={payment.pix.qrCodeBase64} />
+        ) : showPix && payment?.pix ? (
+          <PixAwaiting
+            qrCode={payment.pix.qrCode}
+            qrCodeBase64={payment.pix.qrCodeBase64}
+            timeoutNotice={pixPollTimedOut ? PIX_POLL_TIMEOUT_MESSAGE : null}
+          />
         ) : uiState === "approved" ? (
-          <p className="font-sans text-sm text-ink">
-            Pagamento aprovado. A confirmação definitiva chega após a notificação do Mercado Pago.
-          </p>
+          <PaymentApproved kind={kind} />
+        ) : uiState === "refunded" ? (
+          <p className="font-sans text-sm text-ink">{PIX_REFUNDED_MESSAGE}</p>
         ) : (
           <>
             {showBrick ? (

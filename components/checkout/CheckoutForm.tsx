@@ -3,14 +3,18 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import CustomerFields from "@/components/checkout/CustomerFields";
 import OrderSummary from "@/components/checkout/OrderSummary";
-import PaymentSection, {
-  type CheckoutPaymentUiState,
-} from "@/components/checkout/PaymentSection";
+import PaymentSection from "@/components/checkout/PaymentSection";
 import ShippingFields from "@/components/checkout/ShippingFields";
 import { PHYSICAL_BOOK } from "@/lib/commerce/product";
 import type { PublicQuote } from "@/lib/commerce/quote";
 import type { PurchaseKind } from "@/lib/commerce/selection";
 import { newPaymentAttemptId } from "@/lib/payments/idempotency";
+import {
+  fetchCheckoutPaymentStatus,
+  shouldStartPixStatusPolling,
+  startPixStatusPolling,
+  type CheckoutPaymentUiState,
+} from "@/lib/payments/pix-status-polling";
 import type { CheckoutPaymentMethod } from "@/lib/payments/schemas";
 import type { PublicPaymentResult } from "@/lib/payments/types";
 
@@ -76,6 +80,8 @@ export default function CheckoutForm({
     mercadoPagoPublicKey ? "loading" : "error",
   );
   const [payment, setPayment] = useState<PublicPaymentResult | null>(null);
+  const [orderPublicId, setOrderPublicId] = useState<string | null>(null);
+  const [pixPollTimedOut, setPixPollTimedOut] = useState(false);
   const [message, setMessage] = useState<string | null>(
     mercadoPagoPublicKey ? null : "Não foi possível carregar os meios de pagamento.",
   );
@@ -194,7 +200,11 @@ export default function CheckoutForm({
         "payment" in data
       ) {
         const result = data.payment as PublicPaymentResult;
+        const nextPublicId =
+          "publicId" in data && typeof data.publicId === "string" ? data.publicId : null;
         setPayment(result);
+        setOrderPublicId(nextPublicId);
+        setPixPollTimedOut(false);
         if (result.method === "pix" && result.pix && result.status !== "approved") {
           setUiState("awaiting_pix");
           return;
@@ -206,6 +216,10 @@ export default function CheckoutForm({
         if (result.status === "rejected" || result.status === "cancelled") {
           paymentAttemptIdRef.current = newPaymentAttemptId();
           setUiState("rejected");
+          return;
+        }
+        if (result.status === "refunded") {
+          setUiState("refunded");
           return;
         }
         setUiState(result.status === "in_process" ? "processing" : "ready");
@@ -226,6 +240,44 @@ export default function CheckoutForm({
       processingRef.current = false;
     }
   }, [kind, quantity, ebookBump]);
+
+  // Refresh during awaiting_pix drops in-memory QR/polling. Payment, webhook
+  // and e-mail delivery are unaffected. Persistence is out of this change.
+  useEffect(() => {
+    if (
+      !shouldStartPixStatusPolling({
+        method: payment?.method,
+        uiState,
+        publicId: orderPublicId,
+      }) ||
+      !orderPublicId
+    ) {
+      return;
+    }
+
+    const stop = startPixStatusPolling(orderPublicId, {
+      fetchStatus: fetchCheckoutPaymentStatus,
+      onTerminal: (status) => {
+        if (status === "approved") {
+          setUiState("approved");
+          return;
+        }
+        if (status === "refunded") {
+          setUiState("refunded");
+          return;
+        }
+        paymentAttemptIdRef.current = newPaymentAttemptId();
+        setUiState("rejected");
+      },
+      onTimeout: () => {
+        setPixPollTimedOut(true);
+      },
+    });
+
+    return () => {
+      stop();
+    };
+  }, [orderPublicId, payment?.method, uiState]);
 
   const handleBrickReady = useCallback(() => {
     if (!processingRef.current) {
@@ -258,12 +310,14 @@ export default function CheckoutForm({
           </p>
         ) : null}
         <PaymentSection
+          kind={kind}
           publicKey={mercadoPagoPublicKey}
           amountCents={quote?.totalCents ?? null}
           quoting={quoting}
           uiState={uiState}
           payment={payment}
           message={message}
+          pixPollTimedOut={pixPollTimedOut}
           onBrickReady={handleBrickReady}
           onSubmitPayment={submitPayment}
           onBrickError={handleBrickError}

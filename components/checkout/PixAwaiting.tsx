@@ -5,9 +5,10 @@ import { useState } from "react";
 type PixAwaitingProps = {
   qrCode: string;
   qrCodeBase64: string | null;
+  timeoutNotice?: string | null;
 };
 
-export default function PixAwaiting({ qrCode, qrCodeBase64 }: PixAwaitingProps) {
+export default function PixAwaiting({ qrCode, qrCodeBase64, timeoutNotice }: PixAwaitingProps) {
   const [copied, setCopied] = useState(false);
 
   const copyCode = async () => {
@@ -45,6 +46,9 @@ export default function PixAwaiting({ qrCode, qrCodeBase64 }: PixAwaitingProps) 
       >
         {copied ? "Código copiado" : "Copiar código Pix"}
       </button>
+      {timeoutNotice ? (
+        <p className="mt-4 font-sans text-sm leading-relaxed text-ink-soft">{timeoutNotice}</p>
+      ) : null}
     </div>
   );
 }

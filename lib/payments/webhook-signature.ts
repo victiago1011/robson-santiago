@@ -27,7 +27,7 @@ export function parseSignatureHeader(header: string | null | undefined): ParsedW
 }
 
 export function normalizeWebhookDataId(dataId: string): string {
-  return dataId.trim();
+  return dataId.trim().toLowerCase();
 }
 
 export function extractWebhookQueryDataId(searchParams: URLSearchParams): string | null {

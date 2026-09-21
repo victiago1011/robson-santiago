@@ -48,6 +48,12 @@ function independentManifest(dataId: string, requestId: string, ts: string) {
 }
 
 function sign(dataId: string, requestId: string, ts: string) {
+  return createHmac("sha256", SECRET)
+    .update(buildWebhookManifest({ dataId, requestId, ts }))
+    .digest("hex");
+}
+
+function signWithRawManifestId(dataId: string, requestId: string, ts: string) {
   return createHmac("sha256", SECRET).update(independentManifest(dataId, requestId, ts)).digest("hex");
 }
 
@@ -337,70 +343,66 @@ test("assinatura gerada com id do body divergente é rejeitada", async () => {
   assert.equal(events.length, 0);
 });
 
-test("data.id no manifesto preserva casing original e rejeita HMAC lowercase", async () => {
+test("manifesto HMAC lowercasing de data.id alfanumérico de Order", async () => {
   const ts = String(Math.floor(NOW / 1000));
+  const queryId = "ORD01ABCDEF123";
   const numericId = "123456";
-  const uppercaseId = "ORD01M28P44G5FG8RJPM579EH56FV";
-  const mixedId = "Ord01AbC";
   const requestId = "req-1";
 
-  assert.equal(normalizeWebhookDataId(`  ${uppercaseId}  `), uppercaseId);
+  assert.equal(normalizeWebhookDataId(`  ${queryId}  `), "ord01abcdef123");
+  assert.equal(
+    extractWebhookQueryDataId(new URLSearchParams(`data.id=${queryId}`)),
+    queryId,
+  );
+  assert.equal(
+    buildWebhookManifest({ dataId: queryId, requestId, ts }),
+    `id:ord01abcdef123;request-id:${requestId};ts:${ts};`,
+  );
   assert.equal(
     buildWebhookManifest({ dataId: numericId, requestId, ts }),
     `id:123456;request-id:${requestId};ts:${ts};`,
   );
-  assert.equal(
-    buildWebhookManifest({ dataId: uppercaseId, requestId, ts }),
-    `id:ORD01M28P44G5FG8RJPM579EH56FV;request-id:${requestId};ts:${ts};`,
-  );
-  assert.equal(
-    buildWebhookManifest({ dataId: mixedId, requestId, ts }),
-    `id:Ord01AbC;request-id:${requestId};ts:${ts};`,
-  );
 
-  const uppercaseV1 = sign(uppercaseId, requestId, ts);
-  const lowercaseV1 = sign(uppercaseId.toLowerCase(), requestId, ts);
-  assert.notEqual(uppercaseV1, lowercaseV1);
+  const lowercaseV1 = sign(queryId.toLowerCase(), requestId, ts);
+  const uppercaseManifestV1 = signWithRawManifestId(queryId, requestId, ts);
+  assert.notEqual(lowercaseV1, uppercaseManifestV1);
 
   assert.equal(
     verifyMercadoPagoSignature({
       secret: SECRET,
-      signatureHeader: `ts=${ts},v1=${uppercaseV1}`,
+      signatureHeader: `ts=${ts},v1=${lowercaseV1}`,
       requestId,
-      dataId: uppercaseId,
+      dataId: queryId,
     }),
     true,
   );
   assert.equal(
     verifyMercadoPagoSignature({
       secret: SECRET,
-      signatureHeader: `ts=${ts},v1=${lowercaseV1}`,
+      signatureHeader: `ts=${ts},v1=${uppercaseManifestV1}`,
       requestId,
-      dataId: uppercaseId,
+      dataId: queryId,
     }),
     false,
-  );
-  assert.equal(
-    extractWebhookQueryDataId(new URLSearchParams(`data.id=${uppercaseId}`)),
-    uppercaseId,
   );
 
   const getCalls = { count: 0, ids: [] as string[] };
   const { store } = mockStore();
   const result = await handle(
-    signedRequest({ dataId: uppercaseId }),
-    async () => mpOrder({ id: uppercaseId, external_reference: "missing-local" }),
+    signedRequest({ dataId: queryId }),
+    async () => mpOrder({ id: queryId, external_reference: "missing-local" }),
     store,
     getCalls,
   );
   assert.equal(result.status, 200);
-  assert.deepEqual(getCalls.ids, [uppercaseId]);
+  assert.equal(result.dataId, queryId);
+  assert.deepEqual(getCalls.ids, [queryId]);
 
   const rejected = { count: 0, ids: [] as string[] };
   const { store: rejectStore, events } = mockStore();
   const invalid = await handle(
-    signedRequest({ dataId: uppercaseId, signature: lowercaseV1 }),
-    async () => mpOrder({ id: uppercaseId }),
+    signedRequest({ dataId: queryId, signature: uppercaseManifestV1 }),
+    async () => mpOrder({ id: queryId }),
     rejectStore,
     rejected,
   );
@@ -418,6 +420,7 @@ test("data.id no manifesto preserva casing original e rejeita HMAC lowercase", a
     numericCalls,
   );
   assert.equal(numeric.status, 200);
+  assert.equal(numeric.dataId, numericId);
   assert.deepEqual(numericCalls.ids, [numericId]);
 });
 

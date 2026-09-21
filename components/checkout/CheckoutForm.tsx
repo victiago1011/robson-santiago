@@ -5,6 +5,15 @@ import CustomerFields from "@/components/checkout/CustomerFields";
 import OrderSummary from "@/components/checkout/OrderSummary";
 import PaymentSection from "@/components/checkout/PaymentSection";
 import ShippingFields from "@/components/checkout/ShippingFields";
+import {
+  checkoutIsQuoting,
+  checkoutNeedsRemoteQuote,
+  checkoutPaymentAmountCents,
+  checkoutQuoteSelection,
+  readCheckoutQuoteResponse,
+  selectCheckoutQuote,
+  type CheckoutRemoteQuote,
+} from "@/lib/commerce/checkout-quote-state";
 import { PHYSICAL_BOOK } from "@/lib/commerce/product";
 import type { PublicQuote } from "@/lib/commerce/quote";
 import type { PurchaseKind } from "@/lib/commerce/selection";
@@ -22,12 +31,6 @@ type CheckoutFormProps = {
   kind: PurchaseKind;
   initialQuote: PublicQuote | null;
   mercadoPagoPublicKey: string | null;
-};
-
-type RemoteQuoteState = {
-  quantity: number;
-  ebookBump: boolean;
-  quote: PublicQuote;
 };
 
 function userFacingPaymentMessage(code?: string): string {
@@ -75,7 +78,7 @@ export default function CheckoutForm({
     kind === "physical" ? PHYSICAL_BOOK.minQuantity : 1,
   );
   const [ebookBump, setEbookBump] = useState(false);
-  const [remote, setRemote] = useState<RemoteQuoteState | null>(null);
+  const [remote, setRemote] = useState<CheckoutRemoteQuote | null>(null);
   const [uiState, setUiState] = useState<CheckoutPaymentUiState>(
     mercadoPagoPublicKey ? "loading" : "error",
   );
@@ -92,38 +95,37 @@ export default function CheckoutForm({
     );
   };
 
-  const isDefaultPhysical =
-    kind === "physical" && quantity === PHYSICAL_BOOK.minQuantity && ebookBump === false;
-  const needsRemoteQuote = kind === "physical" && !isDefaultPhysical;
+  const needsRemoteQuote = checkoutNeedsRemoteQuote({
+    kind,
+    quantity,
+    ebookBump,
+    initialQuote,
+  });
 
   useEffect(() => {
     if (!needsRemoteQuote) {
       return;
     }
 
+    const selection = checkoutQuoteSelection(kind, quantity, ebookBump);
     let cancelled = false;
 
     void fetch("/api/checkout/quote", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind: "physical", quantity, ebookBump }),
+      body: JSON.stringify(selection),
     })
       .then(async (response) => {
         const data: unknown = await response.json();
         if (cancelled) return;
-        if (
-          typeof data === "object" &&
-          data !== null &&
-          "ok" in data &&
-          data.ok === true &&
-          "quote" in data
-        ) {
-          setRemote({
-            quantity,
-            ebookBump,
-            quote: data.quote as PublicQuote,
-          });
+        const quote = readCheckoutQuoteResponse(data);
+        if (!quote) {
+          return;
         }
+        setRemote({
+          selection,
+          quote,
+        });
       })
       .catch(() => {
         // Keep the last successful quote; do not invent totals in the browser.
@@ -132,16 +134,23 @@ export default function CheckoutForm({
     return () => {
       cancelled = true;
     };
-  }, [needsRemoteQuote, quantity, ebookBump]);
+  }, [needsRemoteQuote, kind, quantity, ebookBump]);
 
-  const quote =
-    kind !== "physical" || isDefaultPhysical
-      ? initialQuote
-      : remote && remote.quantity === quantity && remote.ebookBump === ebookBump
-        ? remote.quote
-        : initialQuote;
-  const quoting =
-    needsRemoteQuote && !(remote && remote.quantity === quantity && remote.ebookBump === ebookBump);
+  const quote = selectCheckoutQuote({
+    kind,
+    quantity,
+    ebookBump,
+    initialQuote,
+    remote,
+  });
+  const quoting = checkoutIsQuoting({
+    kind,
+    quantity,
+    ebookBump,
+    initialQuote,
+    remote,
+  });
+  const amountCents = checkoutPaymentAmountCents(quote);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -312,7 +321,7 @@ export default function CheckoutForm({
         <PaymentSection
           kind={kind}
           publicKey={mercadoPagoPublicKey}
-          amountCents={quote?.totalCents ?? null}
+          amountCents={amountCents}
           quoting={quoting}
           uiState={uiState}
           payment={payment}

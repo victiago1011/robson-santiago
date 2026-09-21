@@ -1,7 +1,13 @@
 import { InputField, SelectField } from "@/components/checkout/Field";
 import { BRAZILIAN_STATES } from "@/lib/commerce/address";
+import type { CheckoutFieldErrors, CheckoutFieldId } from "@/lib/commerce/checkout-field-errors";
 
-export default function ShippingFields() {
+type ShippingFieldsProps = {
+  errors?: CheckoutFieldErrors;
+  onClearField?: (id: CheckoutFieldId) => void;
+};
+
+export default function ShippingFields({ errors = {}, onClearField }: ShippingFieldsProps) {
   return (
     <fieldset className="min-w-0 border-0 p-0">
       <legend className="font-display text-2xl tracking-tight text-ink md:text-[1.75rem]">
@@ -19,6 +25,8 @@ export default function ShippingFields() {
             placeholder="00000-000"
             data-checkout="cep"
             required
+            error={errors.shipping_zip}
+            onInput={() => onClearField?.("shipping_zip")}
           />
         </div>
         <div className="sm:col-span-4 sm:col-start-1">
@@ -28,6 +36,8 @@ export default function ShippingFields() {
             label="Rua"
             autoComplete="address-line1"
             required
+            error={errors.shipping_street}
+            onInput={() => onClearField?.("shipping_street")}
           />
         </div>
         <div className="sm:col-span-2">
@@ -37,6 +47,8 @@ export default function ShippingFields() {
             label="Número"
             autoComplete="on"
             required
+            error={errors.shipping_number}
+            onInput={() => onClearField?.("shipping_number")}
           />
         </div>
         <div className="sm:col-span-6">
@@ -54,6 +66,8 @@ export default function ShippingFields() {
             label="Bairro"
             autoComplete="address-level3"
             required
+            error={errors.shipping_district}
+            onInput={() => onClearField?.("shipping_district")}
           />
         </div>
         <div className="sm:col-span-4">
@@ -63,6 +77,8 @@ export default function ShippingFields() {
             label="Cidade"
             autoComplete="address-level2"
             required
+            error={errors.shipping_city}
+            onInput={() => onClearField?.("shipping_city")}
           />
         </div>
         <div className="sm:col-span-2">
@@ -73,6 +89,8 @@ export default function ShippingFields() {
             autoComplete="address-level1"
             defaultValue=""
             required
+            error={errors.shipping_state}
+            onChange={() => onClearField?.("shipping_state")}
           >
             <option value="" disabled>
               UF

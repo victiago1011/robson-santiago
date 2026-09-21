@@ -1,10 +1,27 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import CheckoutReview from "@/components/checkout/CheckoutReview";
 import CustomerFields from "@/components/checkout/CustomerFields";
 import OrderSummary from "@/components/checkout/OrderSummary";
 import PaymentSection from "@/components/checkout/PaymentSection";
 import ShippingFields from "@/components/checkout/ShippingFields";
+import {
+  canAdvanceToPayment,
+  canAlterCheckoutOrder,
+  canEditCheckoutSelection,
+  displayedCheckoutOrder,
+  isCheckoutOrderFrozen,
+  shouldMountPaymentSection,
+  type CheckoutStep,
+} from "@/lib/commerce/checkout-flow";
+import {
+  checkoutFieldErrors,
+  firstInvalidCheckoutField,
+  type CheckoutFieldErrors,
+  type CheckoutFieldId,
+} from "@/lib/commerce/checkout-field-errors";
+import { checkoutReviewFromFields, type CheckoutReviewData } from "@/lib/commerce/checkout-review";
 import {
   checkoutIsQuoting,
   checkoutNeedsRemoteQuote,
@@ -19,6 +36,11 @@ import type { PublicQuote } from "@/lib/commerce/quote";
 import type { PurchaseKind } from "@/lib/commerce/selection";
 import { newPaymentAttemptId } from "@/lib/payments/idempotency";
 import {
+  BrickSubmitRejected,
+  brickSubmitOutcomeFromPayment,
+  decideBrickSubmitResolution,
+} from "@/lib/payments/brick-submit";
+import {
   fetchCheckoutPaymentStatus,
   shouldStartPixStatusPolling,
   startPixStatusPolling,
@@ -31,6 +53,12 @@ type CheckoutFormProps = {
   kind: PurchaseKind;
   initialQuote: PublicQuote | null;
   mercadoPagoPublicKey: string | null;
+};
+
+type FrozenCheckoutOrder = {
+  quote: PublicQuote | null;
+  quantity: number;
+  ebookBump: boolean;
 };
 
 function userFacingPaymentMessage(code?: string): string {
@@ -74,10 +102,14 @@ export default function CheckoutForm({
   const paymentAttemptIdRef = useRef(newPaymentAttemptId());
   const processingRef = useRef(false);
 
+  const [step, setStep] = useState<CheckoutStep>("details");
+  const [fieldErrors, setFieldErrors] = useState<CheckoutFieldErrors>({});
+  const [review, setReview] = useState<CheckoutReviewData | null>(null);
   const [quantity, setQuantity] = useState<number>(
     kind === "physical" ? PHYSICAL_BOOK.minQuantity : 1,
   );
   const [ebookBump, setEbookBump] = useState(false);
+  const [frozenOrder, setFrozenOrder] = useState<FrozenCheckoutOrder | null>(null);
   const [remote, setRemote] = useState<CheckoutRemoteQuote | null>(null);
   const [uiState, setUiState] = useState<CheckoutPaymentUiState>(
     mercadoPagoPublicKey ? "loading" : "error",
@@ -93,6 +125,17 @@ export default function CheckoutForm({
     setQuantity(
       Math.min(PHYSICAL_BOOK.maxQuantity, Math.max(PHYSICAL_BOOK.minQuantity, nextQuantity)),
     );
+  };
+
+  const clearFieldError = (id: CheckoutFieldId) => {
+    setFieldErrors((current) => {
+      if (!current[id]) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
   };
 
   const needsRemoteQuote = checkoutNeedsRemoteQuote({
@@ -143,6 +186,8 @@ export default function CheckoutForm({
     initialQuote,
     remote,
   });
+  const quoteRef = useRef(quote);
+  quoteRef.current = quote;
   const quoting = checkoutIsQuoting({
     kind,
     quantity,
@@ -150,10 +195,66 @@ export default function CheckoutForm({
     initialQuote,
     remote,
   });
-  const amountCents = checkoutPaymentAmountCents(quote);
+  const displayed = displayedCheckoutOrder({ quote, quantity, ebookBump }, frozenOrder);
+  const amountCents = checkoutPaymentAmountCents(displayed.quote);
+  const orderFrozen = frozenOrder !== null || isCheckoutOrderFrozen(uiState);
+  const selectionEditable =
+    kind === "physical" && canEditCheckoutSelection({ step, frozen: orderFrozen });
+  const showAlterOrder = canAlterCheckoutOrder({
+    step,
+    hasPayment: payment !== null,
+    uiState,
+  });
+
+  function handleBackToDetails() {
+    if (payment !== null || uiState === "processing" || isCheckoutOrderFrozen(uiState)) {
+      return;
+    }
+    setStep("details");
+  }
+
+  function handleContinue() {
+    const form = formRef.current;
+    if (!form || step !== "details") {
+      return;
+    }
+
+    const fields = readCheckoutFields(form);
+    const errors = checkoutFieldErrors({
+      kind,
+      ebookBump,
+      customer: fields.customer,
+      shipping: fields.shipping,
+    });
+    setFieldErrors(errors);
+
+    if (!canAdvanceToPayment({ quoting, amountCents, errors })) {
+      const first = firstInvalidCheckoutField(errors);
+      if (first) {
+        requestAnimationFrame(() => {
+          const field = document.getElementById(first);
+          field?.focus();
+          field?.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
+      }
+      return;
+    }
+
+    setReview(checkoutReviewFromFields(kind, fields));
+    if (payment === null) {
+      setUiState(mercadoPagoPublicKey ? "loading" : "error");
+      setMessage(
+        mercadoPagoPublicKey ? null : "Não foi possível carregar os meios de pagamento.",
+      );
+    }
+    setStep("payment");
+  }
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (step === "details") {
+      handleContinue();
+    }
   };
 
   const requiresShipping = kind !== "digital";
@@ -211,27 +312,38 @@ export default function CheckoutForm({
         const result = data.payment as PublicPaymentResult;
         const nextPublicId =
           "publicId" in data && typeof data.publicId === "string" ? data.publicId : null;
+        const snapshot = {
+          quote: quoteRef.current,
+          quantity,
+          ebookBump,
+        };
+        setFrozenOrder((current) => current ?? snapshot);
         setPayment(result);
         setOrderPublicId(nextPublicId);
         setPixPollTimedOut(false);
-        if (result.method === "pix" && result.pix && result.status !== "approved") {
+
+        const outcome = brickSubmitOutcomeFromPayment({
+          ok: true,
+          method: result.method,
+          status: result.status,
+          hasPix: Boolean(result.pix),
+        });
+        if (outcome.type === "awaiting_pix") {
           setUiState("awaiting_pix");
-          return;
-        }
-        if (result.status === "approved") {
+        } else if (outcome.type === "approved") {
           setUiState("approved");
-          return;
-        }
-        if (result.status === "rejected" || result.status === "cancelled") {
+        } else if (outcome.type === "rejected" || outcome.type === "cancelled") {
           paymentAttemptIdRef.current = newPaymentAttemptId();
           setUiState("rejected");
-          return;
-        }
-        if (result.status === "refunded") {
+        } else if (outcome.type === "refunded") {
           setUiState("refunded");
-          return;
+        } else {
+          setUiState(result.status === "in_process" ? "processing" : "ready");
         }
-        setUiState(result.status === "in_process" ? "processing" : "ready");
+
+        if (decideBrickSubmitResolution(outcome) === "reject") {
+          throw new BrickSubmitRejected();
+        }
         return;
       }
 
@@ -240,7 +352,15 @@ export default function CheckoutForm({
       paymentAttemptIdRef.current = newPaymentAttemptId();
       setUiState("error");
       setMessage(userFacingPaymentMessage(code));
-    } catch {
+      if (
+        decideBrickSubmitResolution(brickSubmitOutcomeFromPayment({ ok: false, code })) === "reject"
+      ) {
+        throw new BrickSubmitRejected();
+      }
+    } catch (error) {
+      if (error instanceof BrickSubmitRejected) {
+        throw error;
+      }
       paymentAttemptIdRef.current = newPaymentAttemptId();
       setUiState("error");
       setMessage(userFacingPaymentMessage());
@@ -311,37 +431,72 @@ export default function CheckoutForm({
       {kind === "physical" ? <input type="hidden" name="ebook_bump" value={ebookBump ? "true" : "false"} /> : null}
 
       <div className="flex min-w-0 flex-col gap-12 md:col-span-7">
-        <CustomerFields />
-        {requiresShipping ? <ShippingFields /> : null}
-        {kind === "digital" ? (
-          <p className="font-sans text-sm leading-relaxed text-ink-soft">
-            Entrega digital após confirmação do pagamento.
-          </p>
-        ) : null}
-        <PaymentSection
-          kind={kind}
-          publicKey={mercadoPagoPublicKey}
-          amountCents={amountCents}
-          quoting={quoting}
-          uiState={uiState}
-          payment={payment}
-          message={message}
-          pixPollTimedOut={pixPollTimedOut}
-          onBrickReady={handleBrickReady}
-          onSubmitPayment={submitPayment}
-          onBrickError={handleBrickError}
-        />
+        <div hidden={step === "payment"}>
+          <div className="flex flex-col gap-12">
+            <CustomerFields errors={fieldErrors} onClearField={clearFieldError} />
+            {requiresShipping ? (
+              <ShippingFields errors={fieldErrors} onClearField={clearFieldError} />
+            ) : null}
+            {kind === "digital" ? (
+              <p className="font-sans text-sm leading-relaxed text-ink-soft">
+                Entrega digital após confirmação do pagamento.
+              </p>
+            ) : null}
+          </div>
+        </div>
+
+        {shouldMountPaymentSection(step) ? (
+          <div className="flex flex-col gap-10">
+            {showAlterOrder ? (
+              <button
+                type="button"
+                onClick={handleBackToDetails}
+                className="inline-flex min-h-11 items-center self-start font-sans text-sm text-ink-soft underline-offset-4 hover:text-ink hover:underline focus-visible:outline-none focus-visible:underline"
+              >
+                ← Alterar dados ou pedido
+              </button>
+            ) : null}
+            {review ? <CheckoutReview review={review} /> : null}
+            <PaymentSection
+              kind={kind}
+              publicKey={mercadoPagoPublicKey}
+              amountCents={amountCents}
+              quoting={quoting}
+              uiState={uiState}
+              payment={payment}
+              message={message}
+              pixPollTimedOut={pixPollTimedOut}
+              onBrickReady={handleBrickReady}
+              onSubmitPayment={submitPayment}
+              onBrickError={handleBrickError}
+            />
+          </div>
+        ) : (
+          <div>
+            <button
+              type="button"
+              onClick={handleContinue}
+              disabled={quoting || amountCents === null}
+              className="inline-flex min-h-12 w-full items-center justify-center rounded-lg bg-ink px-5 font-sans text-sm font-medium tracking-[0.12em] text-paper-strong uppercase hover:bg-ink/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/40 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Continuar para pagamento
+            </button>
+            {quoting ? (
+              <p className="mt-3 font-sans text-sm text-ink-soft">Atualizando o valor do pedido...</p>
+            ) : null}
+          </div>
+        )}
       </div>
 
       <aside className="flex min-w-0 flex-col gap-8 md:sticky md:top-28 md:col-span-5">
         <OrderSummary
-          quote={quote}
-          quantity={quantity}
-          quantityEditable={kind === "physical"}
-          onQuantityChange={kind === "physical" ? handleQuantityChange : undefined}
-          quoting={quoting}
-          ebookBump={ebookBump}
-          onEbookBumpChange={kind === "physical" ? setEbookBump : undefined}
+          quote={displayed.quote}
+          quantity={displayed.quantity}
+          quantityEditable={selectionEditable}
+          onQuantityChange={selectionEditable ? handleQuantityChange : undefined}
+          quoting={quoting && frozenOrder === null}
+          ebookBump={displayed.ebookBump}
+          onEbookBumpChange={selectionEditable ? setEbookBump : undefined}
         />
       </aside>
     </form>

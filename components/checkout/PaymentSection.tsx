@@ -57,15 +57,18 @@ export default function PaymentSection({
     !quoting &&
     (uiState === "loading" || uiState === "ready" || uiState === "processing" || uiState === "rejected" || uiState === "error");
   const showPix = checkoutShowsPixAwaiting(uiState) && Boolean(payment?.pix);
+  const choosingPayment = !showPix && uiState !== "approved" && uiState !== "refunded";
 
   return (
     <section aria-labelledby="pagamento-heading" className="min-w-0">
       <h2 id="pagamento-heading" className="font-display text-2xl tracking-tight text-ink md:text-[1.75rem]">
         Pagamento
       </h2>
-      <p className="mt-3 font-sans text-sm leading-relaxed text-ink-soft">
-        Escolha Pix ou cartão de crédito para concluir a compra.
-      </p>
+      {choosingPayment ? (
+        <p className="mt-3 font-sans text-sm leading-relaxed text-ink-soft">
+          Revise seu pedido e escolha como deseja pagar.
+        </p>
+      ) : null}
 
       <div className="mt-8">
         {!publicKey ? (

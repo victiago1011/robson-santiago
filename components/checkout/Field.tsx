@@ -1,7 +1,13 @@
 import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
 
-const controlClassName =
-  "mt-2 w-full min-h-12 rounded-lg border border-rule bg-white px-4 font-sans text-base text-ink placeholder:text-ink-soft/55 transition-[border-color,box-shadow] focus-visible:border-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/20 disabled:cursor-not-allowed disabled:opacity-60";
+function controlClassName(invalid: boolean): string {
+  return [
+    "mt-2 w-full min-h-12 rounded-lg border bg-white px-4 font-sans text-base text-ink placeholder:text-ink-soft/55 transition-[border-color,box-shadow] focus-visible:outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-60",
+    invalid
+      ? "border-[#8f2d2d] focus-visible:border-[#8f2d2d] focus-visible:ring-[#8f2d2d]/25"
+      : "border-rule focus-visible:border-ink focus-visible:ring-ink/20",
+  ].join(" ");
+}
 
 type FieldShellProps = {
   id: string;
@@ -29,7 +35,7 @@ function FieldShell({ id, label, hint, error, children }: FieldShellProps) {
       <p
         id={errorId}
         role="alert"
-        className={`mt-1.5 min-h-[1.25rem] font-sans text-xs leading-relaxed text-ink ${error ? "" : "sr-only"}`}
+        className={`mt-1.5 min-h-[1.25rem] font-sans text-xs leading-relaxed ${error ? "text-[#8f2d2d]" : "sr-only"}`}
       >
         {error ?? ""}
       </p>
@@ -53,7 +59,7 @@ export function InputField({ id, label, hint, error, ...inputProps }: InputField
         id={id}
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy}
-        className={controlClassName}
+        className={controlClassName(Boolean(error))}
         {...inputProps}
       />
     </FieldShell>
@@ -84,7 +90,7 @@ export function SelectField({
         id={id}
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy}
-        className={controlClassName}
+        className={controlClassName(Boolean(error))}
         {...selectProps}
       >
         {children}

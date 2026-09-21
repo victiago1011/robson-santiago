@@ -1,7 +1,4 @@
 import Link from "next/link";
-import { getPublicQuote } from "@/lib/commerce/get-public-quote";
-import { formatBRLFromCents } from "@/lib/commerce/money";
-import type { PublicQuote } from "@/lib/commerce/quote";
 
 function IconCart() {
   return (
@@ -55,28 +52,11 @@ function IconDispositivo() {
   );
 }
 
-function Price({ quote }: { quote: PublicQuote | null }) {
-  if (!quote) {
-    return <p className="mt-3 font-display text-lg text-ink-soft italic">Valor a definir</p>;
-  }
-
-  return (
-    <p className="mt-3 font-display text-2xl tracking-tight text-ink">
-      {formatBRLFromCents(quote.subtotalCents)}
-    </p>
-  );
+function DisplayPrice({ value }: { value: string }) {
+  return <p className="mt-3 font-display text-2xl tracking-tight text-ink">{value}</p>;
 }
 
-export default async function LivroEdicoes() {
-  const [physical, digital] = await Promise.all([
-    getPublicQuote({ kind: "physical", quantity: 1, ebookBump: false }),
-    getPublicQuote({ kind: "digital" }),
-  ]);
-
-  const shippingLabel = physical
-    ? `Frete a partir de ${formatBRLFromCents(physical.shippingCents)}`
-    : "Frete a consultar";
-
+export default function LivroEdicoes() {
   return (
     <section
       id="comprar"
@@ -98,8 +78,8 @@ export default async function LivroEdicoes() {
               <p className="mt-5 font-sans text-[0.7rem] font-medium tracking-[0.22em] text-ink uppercase">
                 Livro físico
               </p>
-              <Price quote={physical} />
-              <p className="mt-2 font-display text-base text-ink-soft italic">{shippingLabel}</p>
+              <DisplayPrice value="R$ 39,90" />
+              <p className="mt-2 font-display text-base text-ink-soft italic">Frete a consultar</p>
               <Link
                 href="/livro/comprar?opcao=fisico"
                 className="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-ink px-4 font-sans text-sm font-medium tracking-[0.12em] text-paper-strong uppercase whitespace-nowrap hover:bg-ink/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/40"
@@ -113,7 +93,7 @@ export default async function LivroEdicoes() {
               <p className="mt-5 font-sans text-[0.7rem] font-medium tracking-[0.22em] text-ink uppercase">
                 E-book
               </p>
-              <Price quote={digital} />
+              <DisplayPrice value="R$ 19,90" />
               <p className="mt-2 max-w-[16rem] font-display text-base text-ink-soft italic">
                 Entrega digital após confirmação do pagamento
               </p>

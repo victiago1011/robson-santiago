@@ -28,8 +28,6 @@ export const metadata: Metadata = {
   },
 };
 
-export const dynamic = "force-dynamic";
-
 export default function LivroPage() {
   return (
     <main className="flex flex-1 flex-col">

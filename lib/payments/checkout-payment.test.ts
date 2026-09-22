@@ -400,6 +400,50 @@ test("status rejected do provider continua rejeição real", async () => {
   }
 });
 
+test("telefone canônico segue ao pedido e o Mercado Pago continua sem telefone", async () => {
+  const orderPhones: string[] = [];
+  const mercadoPagoBodies: string[] = [];
+  const deps = mockDeps();
+  deps.createOrder = async (input) => {
+    orderPhones.push(input.customer.phone);
+    return {
+      ok: true,
+      publicId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      orderId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+    };
+  };
+  const createMercadoPagoOrder = deps.mercadoPago.createOrder;
+  deps.mercadoPago.createOrder = async (input, key) => {
+    mercadoPagoBodies.push(JSON.stringify(input));
+    return createMercadoPagoOrder(input, key);
+  };
+
+  const parsed = checkoutPaySchema.parse(
+    physicalPayload({
+      customer: {
+        ...customer,
+        phone: "(48) 99999-9999",
+        document: "529.982.247-25",
+      },
+      shipping: { ...shipping, zip: "01310-100" },
+    }),
+  );
+  assert.equal(parsed.kind, "physical");
+  assert.equal(parsed.customer.phone, "48999999999");
+  assert.equal(parsed.customer.document, "52998224725");
+  if (parsed.kind === "physical") {
+    assert.equal(parsed.shipping.zip, "01310100");
+  }
+
+  const result = await startCheckoutPayment(parsed, deps);
+  assert.equal(result.ok, true);
+  assert.deepEqual(orderPhones, ["48999999999"]);
+  assert.equal(mercadoPagoBodies.length, 1);
+  assert.equal(mercadoPagoBodies[0].includes("phone"), false);
+  assert.equal(mercadoPagoBodies[0].includes("48999999999"), false);
+  assert.equal(mercadoPagoBodies[0].includes("+55"), false);
+});
+
 test("decidePaymentAttemptAction reutiliza chave da mesma tentativa", () => {
   const pending: ExistingPaymentAttempt = {
     id: "p1",

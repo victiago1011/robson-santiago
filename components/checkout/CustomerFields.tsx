@@ -1,5 +1,7 @@
 import { InputField } from "@/components/checkout/Field";
 import type { CheckoutFieldErrors, CheckoutFieldId } from "@/lib/commerce/checkout-field-errors";
+import { formatCpf } from "@/lib/commerce/cpf";
+import { maskBrazilianPhoneInput } from "@/lib/commerce/phone";
 
 type CustomerFieldsProps = {
   errors?: CheckoutFieldErrors;
@@ -20,6 +22,7 @@ export default function CustomerFields({ errors = {}, onClearField }: CustomerFi
             label="Nome completo"
             autoComplete="name"
             autoCapitalize="words"
+            placeholder="Ex.: João da Silva"
             required
             error={errors.customer_name}
             onInput={() => onClearField?.("customer_name")}
@@ -41,11 +44,20 @@ export default function CustomerFields({ errors = {}, onClearField }: CustomerFi
           name="customer_phone"
           label="WhatsApp"
           type="tel"
-          inputMode="tel"
+          inputMode="numeric"
           autoComplete="tel"
+          prefix="+55"
+          placeholder="(00) 00000-0000"
           required
           error={errors.customer_phone}
-          onInput={() => onClearField?.("customer_phone")}
+          onInput={(event) => {
+            const input = event.currentTarget;
+            const next = maskBrazilianPhoneInput(input.value);
+            if (input.value !== next) {
+              input.value = next;
+            }
+            onClearField?.("customer_phone");
+          }}
         />
         <div className="sm:col-span-2 sm:max-w-xs">
           <InputField
@@ -56,7 +68,14 @@ export default function CustomerFields({ errors = {}, onClearField }: CustomerFi
             autoComplete="off"
             required
             error={errors.customer_document}
-            onInput={() => onClearField?.("customer_document")}
+            onInput={(event) => {
+              const input = event.currentTarget;
+              const next = formatCpf(input.value);
+              if (input.value !== next) {
+                input.value = next;
+              }
+              onClearField?.("customer_document");
+            }}
           />
         </div>
       </div>

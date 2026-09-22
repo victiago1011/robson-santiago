@@ -28,7 +28,7 @@ const emptyShipping: CheckoutShippingInput = {
 const validCustomer: CheckoutCustomerInput = {
   name: "Ana Souza",
   email: "ana@example.com",
-  phone: "abc",
+  phone: "11999999999",
   document: "52998224725",
 };
 
@@ -52,7 +52,7 @@ test("e-book com campos vazios aponta só o comprador, na ordem do formulário",
   assert.deepEqual(errors, {
     customer_name: "Informe seu nome completo.",
     customer_email: "Informe um e-mail válido.",
-    customer_phone: "Informe seu WhatsApp.",
+    customer_phone: "Informe um WhatsApp válido com DDD.",
     customer_document: "Informe um CPF válido.",
   });
   assert.equal(firstInvalidCheckoutField(errors), "customer_name");
@@ -144,12 +144,12 @@ test("CPF válido é aceito e CPF inválido marca o documento", () => {
   }
 });
 
-test("complemento vazio ou com 80 caracteres é válido e 81 marca o campo", () => {
+test("complemento com 30 caracteres é válido e 31 marca o campo", () => {
   assert.deepEqual(
     checkoutFieldErrors({
       kind: "physical",
       customer: validCustomer,
-      shipping: { ...validShipping, complement: "A".repeat(80) },
+      shipping: { ...validShipping, complement: "A".repeat(30) },
     }),
     {},
   );
@@ -157,41 +157,34 @@ test("complemento vazio ou com 80 caracteres é válido e 81 marca o campo", () 
     checkoutFieldErrors({
       kind: "physical",
       customer: validCustomer,
-      shipping: { ...validShipping, complement: "A".repeat(81) },
+      shipping: { ...validShipping, complement: "A".repeat(31) },
     }).shipping_complement,
-    "Use no máximo 80 caracteres.",
+    "Use no máximo 30 caracteres.",
   );
 });
 
-test("WhatsApp segue só texto não vazio até 20 caracteres", () => {
-  assert.deepEqual(
-    checkoutFieldErrors({
-      kind: "digital",
-      customer: { ...validCustomer, phone: "abc" },
-    }),
-    {},
-  );
-  assert.deepEqual(
-    checkoutFieldErrors({
-      kind: "digital",
-      customer: { ...validCustomer, phone: "12345678901234567890" },
-    }),
-    {},
-  );
-  assert.equal(
-    checkoutFieldErrors({
-      kind: "digital",
-      customer: { ...validCustomer, phone: "   " },
-    }).customer_phone,
-    "Informe seu WhatsApp.",
-  );
-  assert.equal(
-    checkoutFieldErrors({
-      kind: "digital",
-      customer: { ...validCustomer, phone: "123456789012345678901" },
-    }).customer_phone,
-    "Use no máximo 20 caracteres.",
-  );
+test("WhatsApp exige celular brasileiro com DDD", () => {
+  for (const phone of ["48999999999", "(48) 99999-9999", "+55 48 99999-9999", "5548999999999"]) {
+    assert.deepEqual(
+      checkoutFieldErrors({
+        kind: "digital",
+        customer: { ...validCustomer, phone },
+      }),
+      {},
+      phone,
+    );
+  }
+
+  for (const phone of ["", "   ", "abc", "4899999999", "489999999999", "48899999999"]) {
+    assert.equal(
+      checkoutFieldErrors({
+        kind: "digital",
+        customer: { ...validCustomer, phone },
+      }).customer_phone,
+      "Informe um WhatsApp válido com DDD.",
+      phone,
+    );
+  }
 });
 
 test("o primeiro campo inválido ignora a ordem de inserção do mapa", () => {

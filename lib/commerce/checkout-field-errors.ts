@@ -69,6 +69,10 @@ type SchemaIssue = {
 };
 
 function messageFor(field: CheckoutFieldId, issue: SchemaIssue): string {
+  if (field === "customer_phone") {
+    return "Informe um WhatsApp válido com DDD.";
+  }
+
   const maxLengthField =
     field !== "customer_document" && field !== "shipping_zip" && field !== "shipping_state";
   if (issue.code === "too_big" && maxLengthField && typeof issue.maximum === "number") {
@@ -80,8 +84,6 @@ function messageFor(field: CheckoutFieldId, issue: SchemaIssue): string {
       return "Informe seu nome completo.";
     case "customer_email":
       return "Informe um e-mail válido.";
-    case "customer_phone":
-      return "Informe seu WhatsApp.";
     case "customer_document":
       return "Informe um CPF válido.";
     case "shipping_zip":

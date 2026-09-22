@@ -1,14 +1,21 @@
 import { z } from "zod";
 import { BRAZILIAN_STATES } from "./address";
 import { isValidCpf, normalizeCpf } from "./cpf";
+import { isValidBrazilianPhone, normalizeBrazilianPhone } from "./phone";
 import { PHYSICAL_QUANTITY } from "./selection";
 
 const trimmed = (max: number) => z.string().trim().min(1).max(max);
 
+export const SHIPPING_COMPLEMENT_MAX_LENGTH = 30;
+
 export const customerSchema = z.object({
   name: trimmed(120),
   email: z.email().trim().max(254),
-  phone: trimmed(20),
+  phone: z
+    .string()
+    .trim()
+    .refine(isValidBrazilianPhone, "PHONE_INVALID")
+    .transform(normalizeBrazilianPhone),
   document: z
     .string()
     .trim()
@@ -28,7 +35,7 @@ export const shippingAddressSchema = z.object({
     .refine((value) => value.length === 8, "ZIP_INVALID"),
   street: trimmed(160),
   number: trimmed(20),
-  complement: z.string().trim().max(80).optional(),
+  complement: z.string().trim().max(SHIPPING_COMPLEMENT_MAX_LENGTH).optional(),
   district: trimmed(80),
   city: trimmed(80),
   state: z.enum(BRAZILIAN_STATES),

@@ -1,6 +1,11 @@
+"use client";
+
+import { useState } from "react";
 import { InputField, SelectField } from "@/components/checkout/Field";
 import { BRAZILIAN_STATES } from "@/lib/commerce/address";
+import { formatCep } from "@/lib/commerce/cep";
 import type { CheckoutFieldErrors, CheckoutFieldId } from "@/lib/commerce/checkout-field-errors";
+import { SHIPPING_COMPLEMENT_MAX_LENGTH } from "@/lib/commerce/schemas";
 
 type ShippingFieldsProps = {
   errors?: CheckoutFieldErrors;
@@ -8,6 +13,8 @@ type ShippingFieldsProps = {
 };
 
 export default function ShippingFields({ errors = {}, onClearField }: ShippingFieldsProps) {
+  const [complementLength, setComplementLength] = useState(0);
+
   return (
     <fieldset className="min-w-0 border-0 p-0">
       <legend className="font-display text-2xl tracking-tight text-ink md:text-[1.75rem]">
@@ -21,12 +28,18 @@ export default function ShippingFields({ errors = {}, onClearField }: ShippingFi
             label="CEP"
             inputMode="numeric"
             autoComplete="postal-code"
-            maxLength={9}
             placeholder="00000-000"
             data-checkout="cep"
             required
             error={errors.shipping_zip}
-            onInput={() => onClearField?.("shipping_zip")}
+            onInput={(event) => {
+              const input = event.currentTarget;
+              const next = formatCep(input.value);
+              if (input.value !== next) {
+                input.value = next;
+              }
+              onClearField?.("shipping_zip");
+            }}
           />
         </div>
         <div className="sm:col-span-4 sm:col-start-1">
@@ -57,9 +70,13 @@ export default function ShippingFields({ errors = {}, onClearField }: ShippingFi
             name="shipping_complement"
             label="Complemento"
             autoComplete="address-line2"
-            maxLength={80}
+            maxLength={SHIPPING_COMPLEMENT_MAX_LENGTH}
+            counter={`${complementLength}/${SHIPPING_COMPLEMENT_MAX_LENGTH}`}
             error={errors.shipping_complement}
-            onInput={() => onClearField?.("shipping_complement")}
+            onInput={(event) => {
+              setComplementLength(event.currentTarget.value.length);
+              onClearField?.("shipping_complement");
+            }}
           />
         </div>
         <div className="sm:col-span-6">

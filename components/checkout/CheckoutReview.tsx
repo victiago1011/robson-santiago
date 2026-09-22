@@ -1,4 +1,7 @@
+import { formatCep } from "@/lib/commerce/cep";
 import type { CheckoutReviewData } from "@/lib/commerce/checkout-review";
+import { formatCpf } from "@/lib/commerce/cpf";
+import { formatBrazilianPhone } from "@/lib/commerce/phone";
 
 type CheckoutReviewProps = {
   review: CheckoutReviewData;
@@ -19,7 +22,7 @@ function shippingSummary(shipping: NonNullable<CheckoutReviewData["shipping"]>):
     lines.push(shipping.complement);
   }
   lines.push(`${shipping.district} — ${shipping.city}/${shipping.state}`);
-  lines.push(`CEP ${shipping.zip}`);
+  lines.push(`CEP ${formatCep(shipping.zip)}`);
   return lines.join("\n");
 }
 
@@ -35,8 +38,8 @@ export default function CheckoutReview({ review }: CheckoutReviewProps) {
       <dl className="mt-6 grid gap-4">
         <ReviewRow label="Nome" value={review.customer.name} />
         <ReviewRow label="E-mail" value={review.customer.email} />
-        <ReviewRow label="WhatsApp" value={review.customer.phone} />
-        <ReviewRow label="CPF" value={review.customer.document} />
+        <ReviewRow label="WhatsApp" value={formatBrazilianPhone(review.customer.phone)} />
+        <ReviewRow label="CPF" value={formatCpf(review.customer.document)} />
         {shipping ? <ReviewRow label="Entrega" value={address} /> : null}
       </dl>
     </section>

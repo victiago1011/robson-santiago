@@ -22,7 +22,10 @@ import {
   type CheckoutFieldErrors,
   type CheckoutFieldId,
 } from "@/lib/commerce/checkout-field-errors";
+import { normalizeCep } from "@/lib/commerce/cep";
 import { checkoutReviewFromFields, type CheckoutReviewData } from "@/lib/commerce/checkout-review";
+import { normalizeCpf } from "@/lib/commerce/cpf";
+import { normalizeBrazilianPhone } from "@/lib/commerce/phone";
 import {
   checkoutIsQuoting,
   checkoutNeedsRemoteQuote,
@@ -79,11 +82,11 @@ function readCheckoutFields(form: HTMLFormElement) {
     customer: {
       name: read("customer_name"),
       email: read("customer_email"),
-      phone: read("customer_phone"),
-      document: read("customer_document"),
+      phone: normalizeBrazilianPhone(read("customer_phone")),
+      document: normalizeCpf(read("customer_document")),
     },
     shipping: {
-      zip: read("shipping_zip"),
+      zip: normalizeCep(read("shipping_zip")),
       street: read("shipping_street"),
       number: read("shipping_number"),
       complement: read("shipping_complement") || undefined,

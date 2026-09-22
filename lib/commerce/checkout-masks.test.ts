@@ -61,7 +61,7 @@ test("CEP mascarado continua canônico de 8 dígitos", () => {
   );
 });
 
-test("checkoutPaySchema rejeita complemento acima de 30 antes do pagamento", () => {
+test("checkoutPaySchema rejeita complemento acima de 20 antes do pagamento", () => {
   const payment = {
     kind: "physical" as const,
     quantity: 1,
@@ -81,9 +81,9 @@ test("checkoutPaySchema rejeita complemento acima de 30 antes do pagamento", () 
 
   const accepted = checkoutPaySchema.parse({
     ...payment,
-    shipping: { ...shipping, complement: "A".repeat(30) },
+    shipping: { ...shipping, complement: "A".repeat(20) },
   });
-  assert.equal(accepted.kind === "physical" && accepted.shipping.complement, "A".repeat(30));
+  assert.equal(accepted.kind === "physical" && accepted.shipping.complement, "A".repeat(20));
   assert.equal(
     checkoutPaySchema.safeParse({
       ...payment,
@@ -101,7 +101,7 @@ test("checkoutPaySchema rejeita complemento acima de 30 antes do pagamento", () 
   assert.equal(
     checkoutPaySchema.safeParse({
       ...payment,
-      shipping: { ...shipping, complement: "A".repeat(31) },
+      shipping: { ...shipping, complement: "A".repeat(21) },
     }).success,
     false,
   );

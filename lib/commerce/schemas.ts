@@ -6,7 +6,7 @@ import { PHYSICAL_QUANTITY } from "./selection";
 
 const trimmed = (max: number) => z.string().trim().min(1).max(max);
 
-export const SHIPPING_COMPLEMENT_MAX_LENGTH = 30;
+export const SHIPPING_COMPLEMENT_MAX_LENGTH = 20;
 
 export const customerSchema = z.object({
   name: trimmed(120),

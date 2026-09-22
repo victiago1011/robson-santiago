@@ -144,12 +144,12 @@ test("CPF válido é aceito e CPF inválido marca o documento", () => {
   }
 });
 
-test("complemento com 30 caracteres é válido e 31 marca o campo", () => {
+test("complemento com 20 caracteres é válido e 21 marca o campo", () => {
   assert.deepEqual(
     checkoutFieldErrors({
       kind: "physical",
       customer: validCustomer,
-      shipping: { ...validShipping, complement: "A".repeat(30) },
+      shipping: { ...validShipping, complement: "A".repeat(20) },
     }),
     {},
   );
@@ -157,9 +157,9 @@ test("complemento com 30 caracteres é válido e 31 marca o campo", () => {
     checkoutFieldErrors({
       kind: "physical",
       customer: validCustomer,
-      shipping: { ...validShipping, complement: "A".repeat(31) },
+      shipping: { ...validShipping, complement: "A".repeat(21) },
     }).shipping_complement,
-    "Use no máximo 30 caracteres.",
+    "Use no máximo 20 caracteres.",
   );
 });
 

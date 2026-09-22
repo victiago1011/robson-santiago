@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Fraunces, Geist, Geist_Mono } from "next/font/google";
-import Header from "@/components/layout/Header";
+import SiteFrame from "@/components/layout/SiteFrame";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -34,8 +34,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       suppressHydrationWarning
     >
       <body className="flex min-h-full flex-col bg-paper font-sans text-ink">
-        <Header />
-        {children}
+        <SiteFrame>{children}</SiteFrame>
       </body>
     </html>
   );

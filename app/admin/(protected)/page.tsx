@@ -1,143 +1,167 @@
+import type { Metadata } from "next";
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { resolveAdminAccess } from "@/lib/admin/guard";
-import { listPhysicalOrders } from "@/lib/admin/order-store";
-import {
-  adminPageCount,
-  formatAdminDateTime,
-  formatAdminMoney,
-  fulfillmentStatusLabel,
-  parseAdminPage,
-  paymentStatusLabel,
-  physicalQuantityLabel,
-} from "@/lib/admin/orders";
+import { AdminLoadError, AdminPageHeader } from "@/components/admin/AdminChrome";
+import { MetricCard } from "@/components/admin/MetricCard";
+import { AdminDataList, OrderCodeLink } from "@/components/admin/OrderTable";
+import { StatusBadge } from "@/components/admin/StatusBadge";
+import { ATTENTION_PREVIEW_LIMIT, deriveMetrics, itemsSummary } from "@/lib/admin/catalog";
+import { requireAdminPage } from "@/lib/admin/guard";
+import { formatAdminDateTime, formatAdminMoney } from "@/lib/admin/orders";
+import { paymentListPath, physicalListPath } from "@/lib/admin/paths";
+import { listAttentionOrders, loadAdminOrderFacts } from "@/lib/admin/queries";
 
 export const dynamic = "force-dynamic";
 
-type AdminOrdersPageProps = {
-  searchParams: Promise<{ page?: string | string[] }>;
+export const metadata: Metadata = {
+  title: "Visão geral",
 };
 
-function pageParam(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
-}
-
-export default async function AdminOrdersPage({ searchParams }: AdminOrdersPageProps) {
-  const access = await resolveAdminAccess();
-  if (!access.ok) {
-    if (access.reason === "anonymous") {
-      redirect("/admin/login");
-    }
+export default async function AdminOverviewPage() {
+  if (!(await requireAdminPage())) {
     return null;
   }
 
-  const params = await searchParams;
-  const page = parseAdminPage(pageParam(params.page));
-
-  let result: Awaited<ReturnType<typeof listPhysicalOrders>>;
-  try {
-    result = await listPhysicalOrders(page);
-  } catch {
-    return (
-      <p className="font-sans text-base text-ink-soft">Não foi possível carregar os pedidos agora.</p>
-    );
+  const facts = await loadAdminOrderFacts();
+  if (!facts) {
+    return <AdminLoadError />;
   }
 
-  const pageCount = adminPageCount(result.total, result.pageSize);
+  const metrics = deriveMetrics(facts);
+  const attention = await listAttentionOrders(ATTENTION_PREVIEW_LIMIT);
 
   return (
     <section>
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <h1 className="font-display text-3xl tracking-tight text-ink">Livro físico</h1>
-        <p className="font-sans text-sm text-ink-soft">
-          {result.total === 1 ? "1 pedido" : `${result.total} pedidos`}
-        </p>
+      <AdminPageHeader
+        title="Visão geral"
+        description="Pedidos, pagamento e envio do livro. Os números saem dos pedidos já gravados."
+      />
+
+      <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="sm:col-span-2">
+          <MetricCard
+            label="Faturamento aprovado"
+            value={formatAdminMoney(metrics.approvedRevenueCents)}
+            href={paymentListPath("approved")}
+            tone="inverse"
+          />
+        </div>
+        <MetricCard
+          label="Pedidos pagos"
+          value={String(metrics.paidOrders)}
+          href={paymentListPath("approved")}
+        />
+        <MetricCard
+          label="Aguardando envio"
+          value={String(metrics.awaitingShipment)}
+          href={physicalListPath("awaiting")}
+          tone={metrics.awaitingShipment > 0 ? "alert" : "default"}
+        />
+        <MetricCard
+          label="Livros físicos vendidos"
+          value={String(metrics.physicalBooksSold)}
+          href="/admin/pedidos/fisicos"
+        />
+        <MetricCard
+          label="E-books vendidos"
+          value={String(metrics.ebooksSold)}
+          href="/admin/pedidos/ebooks"
+        />
+        <MetricCard
+          label="Aguardando pagamento"
+          value={formatAdminMoney(metrics.pendingRevenueCents)}
+          href={paymentListPath("pending")}
+        />
+        <MetricCard
+          label="Recusados / cancelados"
+          value={formatAdminMoney(metrics.declinedRevenueCents)}
+          href={paymentListPath("declined")}
+        />
       </div>
 
-      {result.orders.length === 0 ? (
-        <p className="mt-10 font-sans text-base text-ink-soft">
-          {result.total === 0
-            ? "Nenhum pedido com livro físico."
-            : "Nenhum pedido nesta página."}
-        </p>
-      ) : (
-        <div className="mt-8 overflow-x-auto border border-rule bg-paper-strong">
-          <table className="w-full min-w-[44rem] border-collapse text-left">
-            <thead>
-              <tr className="border-b border-rule font-sans text-[0.7rem] tracking-[0.16em] text-ink-soft uppercase">
-                <th className="px-4 py-3 font-medium">Pedido</th>
-                <th className="px-4 py-3 font-medium">Data</th>
-                <th className="px-4 py-3 font-medium">Comprador</th>
-                <th className="px-4 py-3 font-medium">Livros</th>
-                <th className="px-4 py-3 font-medium">Total</th>
-                <th className="px-4 py-3 font-medium">Pagamento</th>
-                <th className="px-4 py-3 font-medium">Envio</th>
-              </tr>
-            </thead>
-            <tbody>
-              {result.orders.map((order) => (
-                <tr key={order.id} className="border-b border-rule last:border-b-0">
-                  <td className="px-4 py-4">
-                    <Link
-                      href={`/admin/pedidos/${order.id}`}
-                      className="font-sans text-sm font-medium tracking-wide text-ink underline-offset-4 hover:underline focus-visible:outline-none focus-visible:underline"
-                    >
-                      {order.friendlyCode}
-                    </Link>
-                    {order.hasEbook ? (
-                      <p className="mt-1 font-sans text-xs tracking-wide text-ink-soft">+ E-book</p>
-                    ) : null}
-                  </td>
-                  <td className="px-4 py-4 font-sans text-sm text-ink">
-                    {formatAdminDateTime(order.createdAt)}
-                  </td>
-                  <td className="px-4 py-4 font-sans text-sm text-ink">{order.buyerName}</td>
-                  <td className="px-4 py-4 font-sans text-sm text-ink">
-                    {physicalQuantityLabel(order.physicalQuantity)}
-                  </td>
-                  <td className="px-4 py-4 font-sans text-sm tabular-nums text-ink">
-                    {formatAdminMoney(order.totalCents)}
-                  </td>
-                  <td className="px-4 py-4 font-sans text-sm text-ink">
-                    {paymentStatusLabel(order.paymentStatus)}
-                  </td>
-                  <td className="px-4 py-4 font-sans text-sm text-ink">
-                    {fulfillmentStatusLabel(order.fulfillmentStatus)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <p className="mt-4 font-sans text-sm text-ink-soft">
+        <Link
+          href={physicalListPath("shipped")}
+          className="underline-offset-4 hover:underline focus-visible:outline-none focus-visible:underline"
+        >
+          {metrics.shipped === 1 ? "1 postado" : `${metrics.shipped} postados`}
+        </Link>
+        <span className="px-2">·</span>
+        <Link
+          href={physicalListPath("delivered")}
+          className="underline-offset-4 hover:underline focus-visible:outline-none focus-visible:underline"
+        >
+          {metrics.delivered === 1 ? "1 entregue" : `${metrics.delivered} entregues`}
+        </Link>
+      </p>
 
-      {pageCount > 1 ? (
-        <nav className="mt-6 flex items-center justify-between gap-4 font-sans text-sm text-ink">
-          {page > 1 ? (
-            <Link
-              href={page === 2 ? "/admin" : `/admin?page=${page - 1}`}
-              className="inline-flex min-h-11 items-center underline-offset-4 hover:underline focus-visible:outline-none focus-visible:underline"
-            >
-              Anterior
-            </Link>
-          ) : (
-            <span />
-          )}
-          <p className="text-ink-soft">
-            Página {page} de {pageCount}
-          </p>
-          {page < pageCount ? (
-            <Link
-              href={`/admin?page=${page + 1}`}
-              className="inline-flex min-h-11 items-center underline-offset-4 hover:underline focus-visible:outline-none focus-visible:underline"
-            >
-              Próxima
-            </Link>
-          ) : (
-            <span />
-          )}
-        </nav>
-      ) : null}
+      <div className="mt-12">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="font-display text-3xl tracking-tight text-ink">Pedidos que exigem atenção</h2>
+            <p className="mt-2 max-w-2xl font-sans text-sm leading-relaxed text-ink-soft">
+              Pagamento aprovado, com livro físico, ainda sem postagem. Os mais antigos vêm primeiro.
+            </p>
+          </div>
+          <Link
+            href={physicalListPath("awaiting")}
+            className="inline-flex min-h-11 items-center font-sans text-sm text-ink underline-offset-4 hover:underline focus-visible:outline-none focus-visible:underline"
+          >
+            Ver fila de envio
+          </Link>
+        </div>
+        {attention === null ? (
+          <p className="mt-8 font-sans text-sm text-ink-soft">Não foi possível listar esta fila agora.</p>
+        ) : (
+          <>
+            <AdminDataList
+              rows={attention}
+              empty="Nenhum livro físico pago aguardando envio."
+              columns={[
+                {
+                  key: "order",
+                  header: "Pedido",
+                  cell: (order) => <OrderCodeLink id={order.id} code={order.friendlyCode} />,
+                },
+                {
+                  key: "date",
+                  header: "Data",
+                  cell: (order) => formatAdminDateTime(order.paidAt ?? order.createdAt),
+                },
+                {
+                  key: "buyer",
+                  header: "Cliente",
+                  cell: (order) => order.buyerName,
+                },
+                {
+                  key: "items",
+                  header: "Itens",
+                  cell: (order) => itemsSummary(order.items),
+                },
+                {
+                  key: "total",
+                  header: "Total",
+                  cell: (order) => formatAdminMoney(order.totalCents),
+                },
+                {
+                  key: "payment",
+                  header: "Pagamento",
+                  cell: (order) => <StatusBadge kind="payment" status={order.paymentStatus} />,
+                },
+                {
+                  key: "shipment",
+                  header: "Envio",
+                  cell: (order) => <StatusBadge kind="fulfillment" status={order.fulfillmentStatus} />,
+                },
+              ]}
+            />
+            {metrics.awaitingShipment > attention.length ? (
+              <p className="mt-4 font-sans text-sm text-ink-soft">
+                Mostrando {attention.length} de {metrics.awaitingShipment}.
+              </p>
+            ) : null}
+          </>
+        )}
+      </div>
     </section>
   );
 }

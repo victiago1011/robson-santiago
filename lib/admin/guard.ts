@@ -1,6 +1,7 @@
 import "server-only";
 
 import { cache } from "react";
+import { redirect } from "next/navigation";
 import { fetchAuthUserId, isAdminAuthConfigured } from "@/lib/admin/auth-api";
 import { decideAdminAccess, type AdminAccess } from "@/lib/admin/access";
 import { readAccessToken } from "@/lib/admin/session";
@@ -42,3 +43,14 @@ export const resolveAdminAccess = cache(async (): Promise<AdminAccess> => {
 
   return decideAdminAccess({ configured: true, userId, isAdmin: allowed });
 });
+
+export async function requireAdminPage(): Promise<boolean> {
+  const access = await resolveAdminAccess();
+  if (access.ok) {
+    return true;
+  }
+  if (access.reason === "anonymous") {
+    redirect("/admin/login");
+  }
+  return false;
+}

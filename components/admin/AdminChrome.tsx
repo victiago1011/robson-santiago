@@ -1,35 +1,52 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { AdminNav } from "@/components/admin/AdminNav";
 import { signOutAdmin } from "@/lib/admin/actions";
+import type { NavCounts } from "@/lib/admin/catalog";
 
-export function AdminTopBar() {
+export function AdminFrame({
+  children,
+  counts,
+}: {
+  children: ReactNode;
+  counts: NavCounts | null;
+}) {
   return (
-    <header className="border-b border-rule">
-      <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-6 py-5 md:px-8">
-        <div>
-          <p className="font-sans text-[0.7rem] font-medium tracking-[0.22em] text-ink-soft uppercase">
-            Robson Santiago
-          </p>
-          <p className="mt-1 font-display text-2xl tracking-tight text-ink">Pedidos</p>
-        </div>
-        <form action={signOutAdmin}>
-          <button
-            type="submit"
-            className="inline-flex min-h-11 items-center font-sans text-[0.7rem] font-medium tracking-[0.16em] text-ink uppercase underline-offset-4 hover:underline focus-visible:outline-none focus-visible:underline"
-          >
-            Sair
-          </button>
-        </form>
+    <div className="min-h-dvh flex-1 bg-paper text-ink">
+      <AdminNav counts={counts} />
+      <div className="min-w-0 md:pl-64">
+        <main className="mx-auto w-full max-w-6xl overflow-x-clip px-4 py-6 sm:px-6 md:px-8 md:py-10">
+          {children}
+        </main>
       </div>
-    </header>
+    </div>
   );
 }
 
-export function AdminFrame({ children }: { children: ReactNode }) {
+export function AdminLoadError() {
   return (
-    <div className="flex min-h-full flex-1 flex-col bg-paper text-ink">
-      <AdminTopBar />
-      <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-8 md:px-8 md:py-10">{children}</main>
+    <p className="font-sans text-base text-ink-soft">Não foi possível carregar os pedidos agora.</p>
+  );
+}
+
+export function AdminPageHeader({
+  title,
+  description,
+  meta,
+}: {
+  title: string;
+  description?: string;
+  meta?: string;
+}) {
+  return (
+    <div className="flex flex-wrap items-end justify-between gap-3">
+      <div className="min-w-0">
+        <h1 className="font-display text-3xl tracking-tight text-ink md:text-4xl">{title}</h1>
+        {description ? (
+          <p className="mt-2 max-w-2xl font-sans text-sm leading-relaxed text-ink-soft">{description}</p>
+        ) : null}
+      </div>
+      {meta ? <p className="font-sans text-sm text-ink-soft">{meta}</p> : null}
     </div>
   );
 }

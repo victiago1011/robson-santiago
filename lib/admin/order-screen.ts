@@ -1,6 +1,8 @@
 import {
   chooseDelivery,
   digitalDeliveryCopy,
+  emailNotificationLabel,
+  canResendEmailNotification,
   eventDetail,
   eventLabel,
   installmentsLabel,
@@ -38,6 +40,14 @@ export type AdminDeliveryRow = DeliveryFact & {
   downloadCount: number;
 };
 
+export type AdminEmailNotificationRow = {
+  kind: string;
+  status: string;
+  sentAt: string | null;
+  lastAttemptAt: string | null;
+  providerAcceptedAt: string | null;
+};
+
 export type AdminOrderRecord = {
   id: string;
   publicId: string;
@@ -65,6 +75,7 @@ export type AdminOrderRecord = {
   items: AdminOrderItem[];
   payments: AdminPaymentAttempt[];
   deliveries: AdminDeliveryRow[];
+  emailNotifications: AdminEmailNotificationRow[];
   events: AdminOrderEvent[];
 };
 
@@ -97,6 +108,19 @@ export type OrderScreen = {
     status: string;
     trackingCode: string | null;
     shippedAt: string | null;
+    paymentApproved: boolean;
+    adminSaleEmail: {
+      status: string;
+      statusLabel: string;
+      sentAt: string | null;
+      canResend: boolean;
+    } | null;
+    buyerShippedEmail: {
+      status: string;
+      statusLabel: string;
+      sentAt: string | null;
+      canResend: boolean;
+    } | null;
   } | null;
   digital: {
     delivery: string;
@@ -144,6 +168,9 @@ export function toOrderScreen(
   const delivery = chooseDelivery(order.deliveries);
   const digitalCopy = ebook ? digitalDeliveryCopy(order.paymentStatus, delivery) : null;
 
+  const adminSale = order.emailNotifications.find((n) => n.kind === "admin_physical_sale") ?? null;
+  const buyerShipped = order.emailNotifications.find((n) => n.kind === "buyer_shipped") ?? null;
+
   return {
     id: order.id,
     friendlyCode,
@@ -176,6 +203,38 @@ export function toOrderScreen(
           status: order.fulfillmentStatus,
           trackingCode: trimmed(order.trackingCode),
           shippedAt: order.shippedAt,
+          paymentApproved: order.paymentStatus === "approved",
+          adminSaleEmail: adminSale
+            ? {
+                status: adminSale.status,
+                statusLabel: emailNotificationLabel(adminSale.status),
+                sentAt: adminSale.sentAt,
+                canResend: canResendEmailNotification(adminSale),
+              }
+            : order.paymentStatus === "approved"
+              ? {
+                  status: "pending",
+                  statusLabel: emailNotificationLabel("pending"),
+                  sentAt: null,
+                  canResend: true,
+                }
+              : null,
+          buyerShippedEmail:
+            order.fulfillmentStatus === "shipped" || order.fulfillmentStatus === "delivered"
+              ? buyerShipped
+                ? {
+                    status: buyerShipped.status,
+                    statusLabel: emailNotificationLabel(buyerShipped.status),
+                    sentAt: buyerShipped.sentAt,
+                    canResend: canResendEmailNotification(buyerShipped),
+                  }
+                : {
+                    status: "pending",
+                    statusLabel: emailNotificationLabel("pending"),
+                    sentAt: null,
+                    canResend: true,
+                  }
+              : null,
         }
       : null,
     digital: digitalCopy

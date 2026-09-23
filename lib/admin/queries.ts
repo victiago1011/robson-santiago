@@ -106,6 +106,13 @@ const DETAIL_SELECT = `
     revoked_at,
     created_at
   ),
+  order_email_notifications (
+    kind,
+    status,
+    sent_at,
+    last_attempt_at,
+    provider_accepted_at
+  ),
   order_events (
     id,
     event_type,
@@ -214,6 +221,15 @@ const detailSchema = z.object({
       download_count: z.number().int().nonnegative(),
       revoked_at: z.string().nullable(),
       created_at: z.string(),
+    }),
+  ),
+  order_email_notifications: nested(
+    z.object({
+      kind: z.string(),
+      status: z.string(),
+      sent_at: z.string().nullable(),
+      last_attempt_at: z.string().nullable(),
+      provider_accepted_at: z.string().nullable(),
     }),
   ),
   order_events: nested(
@@ -608,6 +624,13 @@ export async function findAdminOrder(id: string): Promise<AdminOrderLookup> {
         createdAt: delivery.created_at,
         emailSentAt: delivery.email_sent_at,
         downloadCount: delivery.download_count,
+      })),
+      emailNotifications: row.order_email_notifications.map((notification) => ({
+        kind: notification.kind,
+        status: notification.status,
+        sentAt: notification.sent_at,
+        lastAttemptAt: notification.last_attempt_at,
+        providerAcceptedAt: notification.provider_accepted_at,
       })),
       events: row.order_events.map((event) => ({
         id: event.id,

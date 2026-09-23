@@ -75,6 +75,12 @@ const EVENT_LABELS: Record<string, string> = {
   payment_reconciled: "Pagamento reconciliado",
   payment_reconciliation_failed: "Falha na reconciliação",
   payment_amount_mismatch: "Valor divergente",
+  fulfillment_preparing_started: "Preparação iniciada",
+  fulfillment_shipped: "Pedido postado",
+  admin_physical_sale_email_sent: "Notificação administrativa enviada",
+  admin_physical_sale_email_failed: "Falha na notificação administrativa",
+  buyer_shipped_email_sent: "E-mail de postagem enviado",
+  buyer_shipped_email_failed: "Falha no e-mail de postagem",
 };
 
 const REASON_LABELS: Record<string, string> = {
@@ -362,7 +368,61 @@ export function eventDetail(metadata: unknown): string | null {
   if (typeof record.reason === "string" && REASON_LABELS[record.reason]) {
     parts.push(REASON_LABELS[record.reason]);
   }
+  if (typeof record.tracking_code === "string" && record.tracking_code.trim()) {
+    parts.push(record.tracking_code.trim());
+  }
   return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+export type EmailNotificationFact = {
+  kind: string;
+  status: string;
+  sentAt: string | null;
+  lastAttemptAt: string | null;
+  providerAcceptedAt: string | null;
+};
+
+export function emailNotificationLabel(status: string): string {
+  if (status === "sent") {
+    return "Enviado";
+  }
+  if (status === "failed") {
+    return "Falha no envio";
+  }
+  if (status === "sending") {
+    return "Enviando";
+  }
+  if (status === "pending") {
+    return "Pendente";
+  }
+  return status;
+}
+
+export function canResendEmailNotification(
+  fact: EmailNotificationFact | null | undefined,
+  nowMs: number = Date.now(),
+  staleMs: number = 5 * 60 * 1000,
+): boolean {
+  if (!fact) {
+    return true;
+  }
+  if (fact.status === "sent" || fact.providerAcceptedAt) {
+    return false;
+  }
+  if (fact.status === "failed" || fact.status === "pending") {
+    return true;
+  }
+  if (fact.status === "sending") {
+    if (!fact.lastAttemptAt) {
+      return true;
+    }
+    const lastMs = Date.parse(fact.lastAttemptAt);
+    if (Number.isNaN(lastMs)) {
+      return true;
+    }
+    return nowMs - lastMs >= staleMs;
+  }
+  return false;
 }
 
 export function paymentMethodLabel(method: string | null): string {

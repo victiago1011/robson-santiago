@@ -10,6 +10,8 @@ import {
 } from "@/lib/payments/store";
 import { fulfillApprovedOrderDigitalDeliveries } from "@/lib/digital-delivery/fulfill-approved-order";
 import { supabaseDigitalDeliveryStore } from "@/lib/digital-delivery/store";
+import { notifyAdminPhysicalSaleSafe } from "@/lib/notifications/notify-admin-physical-sale";
+import { supabaseOrderEmailNotificationStore } from "@/lib/notifications/store";
 
 export async function POST(request: Request) {
   const result = await handleMercadoPagoWebhook(request, process.env, {
@@ -29,6 +31,9 @@ export async function POST(request: Request) {
       if (result.needsRetry) {
         throw new Error("DIGITAL_DELIVERY_RETRY");
       }
+    },
+    notifyAdminPhysicalSale: async (orderId) => {
+      await notifyAdminPhysicalSaleSafe(orderId, supabaseOrderEmailNotificationStore);
     },
   });
 

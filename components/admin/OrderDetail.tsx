@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { LogisticsPanel } from "@/components/admin/LogisticsPanel";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import type { OrderScreen } from "@/lib/admin/order-screen";
 import {
@@ -7,7 +8,6 @@ import {
   formatAdminDateTime,
   formatAdminMoney,
   formatAdminZip,
-  fulfillmentStatusLabel,
   itemDisplayName,
   paymentStatusLabel,
 } from "@/lib/admin/orders";
@@ -192,15 +192,7 @@ export function OrderDetail({ order }: { order: OrderScreen }) {
 
         {order.logistics ? (
           <Block title="Logística">
-            <dl className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              <Field label="Status" value={fulfillmentStatusLabel(order.logistics.status)} />
-              {order.logistics.trackingCode ? (
-                <Field label="Código de rastreio" value={order.logistics.trackingCode} />
-              ) : null}
-              {order.logistics.shippedAt ? (
-                <Field label="Data de postagem" value={formatAdminDateTime(order.logistics.shippedAt)} />
-              ) : null}
-            </dl>
+            <LogisticsPanel orderId={order.id} logistics={order.logistics} />
           </Block>
         ) : null}
 

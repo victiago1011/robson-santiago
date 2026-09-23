@@ -189,6 +189,7 @@ async function handle(
   store: WebhookPaymentStore,
   getCalls: { count: number; ids: string[] },
   ensureDigitalDeliveries: (orderId: string) => Promise<void> = async () => undefined,
+  notifyAdminPhysicalSale?: (orderId: string) => Promise<void>,
 ) {
   return handleMercadoPagoWebhook(
     request,
@@ -207,6 +208,7 @@ async function handle(
       }),
       store,
       ensureDigitalDeliveries,
+      notifyAdminPhysicalSale,
     },
   );
 }
@@ -904,4 +906,48 @@ test("erro desconhecido permanece conservador", async () => {
   assert.equal(events.length, 0);
   assert.equal(order?.paymentStatus, "pending");
   assert.equal(order?.fulfillmentStatus, "pending");
+});
+
+test("notificação admin física é chamada após approve e falha não vira 503", async () => {
+  const { store, order } = mockStore();
+  const notifyCalls: string[] = [];
+  const result = await handle(
+    signedRequest(),
+    async () => mpOrder(),
+    store,
+    { count: 0, ids: [] },
+    async () => undefined,
+    async (orderId) => {
+      notifyCalls.push(orderId);
+      throw new Error("resend_down");
+    },
+  );
+  assert.equal(result.ok, true);
+  assert.equal(result.status, 200);
+  assert.equal(result.code, "RECONCILED");
+  assert.equal(order?.paymentStatus, "approved");
+  assert.equal(order?.fulfillmentStatus, "pending");
+  assert.deepEqual(notifyCalls, [ORDER_ID]);
+});
+
+test("falha do e-book ainda chama notificação admin e retorna 503 só pelo e-book", async () => {
+  const { store, order } = mockStore();
+  const notifyCalls: string[] = [];
+  const result = await handle(
+    signedRequest(),
+    async () => mpOrder(),
+    store,
+    { count: 0, ids: [] },
+    async () => {
+      throw new Error("delivery_store_down");
+    },
+    async (orderId) => {
+      notifyCalls.push(orderId);
+    },
+  );
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 503);
+  assert.equal(result.code, "DIGITAL_DELIVERY_FAILED");
+  assert.equal(order?.paymentStatus, "approved");
+  assert.deepEqual(notifyCalls, [ORDER_ID]);
 });

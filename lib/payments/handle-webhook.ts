@@ -28,6 +28,8 @@ export type WebhookDependencies = {
   getMercadoPago: () => MercadoPagoOrdersGateway;
   store: WebhookPaymentStore;
   ensureDigitalDeliveries: (orderId: string) => Promise<void>;
+  /** Best-effort; must not throw in a way that undoes payment. Failures are swallowed. */
+  notifyAdminPhysicalSale?: (orderId: string) => Promise<void>;
   now?: () => number;
 };
 
@@ -164,10 +166,27 @@ export async function handleMercadoPagoWebhook(
     await persistReconciliation(deps.store, providerOrder, decision, now);
 
     if (decision.nextOrderStatus === "approved") {
+      let digitalFailed = false;
       try {
         await deps.ensureDigitalDeliveries(decision.order.id);
       } catch {
+        digitalFailed = true;
         console.error("digital_delivery_fulfill_failed", { code: "DIGITAL_DELIVERY_FAILED" });
+      }
+
+      // Admin physical-sale email is isolated from payment and ebook delivery.
+      // Never let Resend failures change the webhook outcome or undo reconciliation.
+      if (deps.notifyAdminPhysicalSale) {
+        try {
+          await deps.notifyAdminPhysicalSale(decision.order.id);
+        } catch {
+          console.error("admin_physical_sale_notify_failed", {
+            code: "ADMIN_PHYSICAL_SALE_NOTIFY_FAILED",
+          });
+        }
+      }
+
+      if (digitalFailed) {
         return { ok: false, code: "DIGITAL_DELIVERY_FAILED", status: 503, dataId };
       }
     }

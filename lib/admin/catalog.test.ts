@@ -71,6 +71,7 @@ function record(extras: Partial<AdminOrderRecord> = {}): AdminOrderRecord {
     ],
     payments: [],
     deliveries: [],
+    emailNotifications: [],
     events: [],
     ...extras,
   };
@@ -270,6 +271,10 @@ test("entrega digital ausente não é tratada como falha", () => {
 
 test("histórico não inventa logística e não repete segredo do metadata", () => {
   assert.equal(eventLabel("payment_reconciled"), "Pagamento reconciliado");
+  assert.equal(eventLabel("fulfillment_preparing_started"), "Preparação iniciada");
+  assert.equal(eventLabel("fulfillment_shipped"), "Pedido postado");
+  assert.equal(eventLabel("admin_physical_sale_email_sent"), "Notificação administrativa enviada");
+  assert.equal(eventLabel("buyer_shipped_email_sent"), "E-mail de postagem enviado");
   assert.equal(eventLabel("shipment_invented"), "shipment_invented");
   const detail = eventDetail({
     method: "pix",

@@ -351,6 +351,7 @@ test("histórico não inventa logística e não repete segredo do metadata", () 
   assert.equal(eventLabel("fulfillment_preparing_started"), "Preparação iniciada");
   assert.equal(eventLabel("fulfillment_shipped"), "Pedido postado");
   assert.equal(eventLabel("admin_physical_sale_email_sent"), "Notificação administrativa enviada");
+  assert.equal(eventLabel("buyer_order_confirmed_email_sent"), "E-mail de confirmação enviado ao comprador");
   assert.equal(eventLabel("buyer_shipped_email_sent"), "E-mail de postagem enviado");
   assert.equal(eventLabel("shipment_invented"), "shipment_invented");
   const detail = eventDetail({

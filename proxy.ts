@@ -24,6 +24,14 @@ function loginRedirect(request: NextRequest) {
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (pathname.startsWith("/pedido/acompanhar/")) {
+    const response = NextResponse.next();
+    response.headers.set("Cache-Control", "private, no-store");
+    response.headers.set("X-Robots-Tag", "noindex, nofollow");
+    return response;
+  }
+
   const accessToken = request.cookies.get(ADMIN_ACCESS_COOKIE)?.value ?? "";
   const refreshToken = request.cookies.get(ADMIN_REFRESH_COOKIE)?.value ?? "";
   const hasUsableAccessToken = Boolean(accessToken) && !accessTokenNeedsRefresh(accessToken);
@@ -65,5 +73,10 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin", "/admin/:path*", "/api/admin/:path*"],
+  matcher: [
+    "/admin",
+    "/admin/:path*",
+    "/api/admin/:path*",
+    "/pedido/acompanhar/:path*",
+  ],
 };

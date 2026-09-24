@@ -11,7 +11,9 @@ import {
 import { fulfillApprovedOrderDigitalDeliveries } from "@/lib/digital-delivery/fulfill-approved-order";
 import { supabaseDigitalDeliveryStore } from "@/lib/digital-delivery/store";
 import { notifyAdminPhysicalSaleSafe } from "@/lib/notifications/notify-admin-physical-sale";
+import { notifyBuyerOrderConfirmedSafe } from "@/lib/notifications/notify-buyer-order-confirmed";
 import { supabaseOrderEmailNotificationStore } from "@/lib/notifications/store";
+import { supabaseOrderTrackingStore } from "@/lib/order-tracking/store";
 
 export async function POST(request: Request) {
   const result = await handleMercadoPagoWebhook(request, process.env, {
@@ -34,6 +36,13 @@ export async function POST(request: Request) {
     },
     notifyAdminPhysicalSale: async (orderId) => {
       await notifyAdminPhysicalSaleSafe(orderId, supabaseOrderEmailNotificationStore);
+    },
+    notifyBuyerOrderConfirmed: async (orderId) => {
+      await notifyBuyerOrderConfirmedSafe(
+        orderId,
+        supabaseOrderEmailNotificationStore,
+        supabaseOrderTrackingStore,
+      );
     },
   });
 

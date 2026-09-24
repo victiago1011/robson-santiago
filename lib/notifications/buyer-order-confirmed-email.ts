@@ -1,14 +1,21 @@
-import { getResendApiKey, getResendFrom, getAppUrl } from "@/lib/email/config";
-import { friendlyOrderCode } from "@/lib/admin/orders";
+import { formatBRLFromCents } from "@/lib/commerce/money";
+import { PHYSICAL_SKU, DIGITAL_SKU } from "@/lib/commerce/selection";
 import type {
   EmailSendAdapter,
   EmailSendPayload,
 } from "@/lib/digital-delivery/ebook-email";
-import type { BuyerShippedOrderContext } from "@/lib/notifications/types";
+import {
+  getAppUrl,
+  getResendApiKey,
+  getResendFrom,
+} from "@/lib/email/config";
+import { friendlyOrderCode } from "@/lib/admin/orders";
+import type { BuyerOrderConfirmedContext } from "@/lib/notifications/types";
 
-export const BUYER_SHIPPED_EMAIL_SUBJECT = "Seu pedido foi postado — A Vida é um Dia";
+export const BUYER_ORDER_CONFIRMED_EMAIL_SUBJECT =
+  "Pedido confirmado — A Vida é um Dia";
 
-export type SendBuyerShippedEmailResult =
+export type SendBuyerOrderConfirmedEmailResult =
   | { ok: true; providerMessageId: string | null }
   | { ok: false; code: string };
 
@@ -28,26 +35,51 @@ function isUsableEmail(email: string): boolean {
   return trimmed.includes("@") && !trimmed.includes(" ");
 }
 
-export function buildBuyerShippedEmail(input: {
+function itemSummaryLines(items: BuyerOrderConfirmedContext["items"]): string[] {
+  return items.map((item) => {
+    const label =
+      item.sku === PHYSICAL_SKU
+        ? "Livro físico"
+        : item.sku === DIGITAL_SKU
+          ? "E-book"
+          : item.title;
+    return `• ${label} × ${item.quantity}`;
+  });
+}
+
+export function buildBuyerOrderConfirmedEmail(input: {
   customerName: string;
   friendlyCode: string;
-  trackingCode: string;
+  items: BuyerOrderConfirmedContext["items"];
+  totalCents: number | null;
   trackingPageUrl: string;
 }): { subject: string; html: string; text: string } {
-  const subject = BUYER_SHIPPED_EMAIL_SUBJECT;
+  const subject = BUYER_ORDER_CONFIRMED_EMAIL_SUBJECT;
   const name = input.customerName.trim() || "Olá";
+  const total =
+    input.totalCents === null || input.totalCents === undefined
+      ? "—"
+      : formatBRLFromCents(input.totalCents);
+  const lines = itemSummaryLines(input.items);
+  const summaryText = lines.join("\n");
+  const summaryHtml = lines.map((line) => escapeHtml(line)).join("<br />");
+
   const text = [
     `${name},`,
     "",
-    "Seu pedido do livro “A Vida é um Dia” foi postado.",
+    "Recebemos o pagamento do seu pedido. Obrigado!",
     "",
     `Pedido: ${input.friendlyCode}`,
-    `Código de rastreio dos Correios: ${input.trackingCode}`,
     "",
-    "Você também pode acompanhar o pedido neste link:",
-    input.trackingPageUrl,
+    "Resumo:",
+    summaryText || "—",
+    `Total: ${total}`,
     "",
-    "A atualização do rastreamento pelos Correios pode levar algum tempo para aparecer.",
+    "Pagamento confirmado.",
+    "",
+    "Postagem em até 3 dias úteis após a confirmação do pagamento.",
+    "",
+    `Acompanhar pedido: ${input.trackingPageUrl}`,
     "",
     "Obrigado,",
     "Robson Santiago",
@@ -68,13 +100,15 @@ export function buildBuyerShippedEmail(input: {
             <tr>
               <td style="font-family:Georgia,'Times New Roman',serif;font-size:15px;line-height:1.7;color:#1c1c1c;">
                 <p style="margin:0 0 20px;">${escapeHtml(name)},</p>
-                <p style="margin:0 0 20px;">Seu pedido do livro “A Vida é um Dia” foi postado.</p>
+                <p style="margin:0 0 20px;">Recebemos o pagamento do seu pedido. Obrigado!</p>
                 <p style="margin:0 0 8px;"><strong>Pedido:</strong> ${escapeHtml(input.friendlyCode)}</p>
-                <p style="margin:0 0 20px;"><strong>Código de rastreio dos Correios:</strong> ${escapeHtml(input.trackingCode)}</p>
+                <p style="margin:0 0 8px;"><strong>Resumo:</strong><br />${summaryHtml || "—"}</p>
+                <p style="margin:0 0 20px;"><strong>Total:</strong> ${escapeHtml(total)}</p>
+                <p style="margin:0 0 20px;">Pagamento confirmado.</p>
+                <p style="margin:0 0 28px;">Postagem em até 3 dias úteis após a confirmação do pagamento.</p>
                 <p style="margin:0 0 28px;">
                   <a href="${escapeHtml(input.trackingPageUrl)}" style="display:inline-block;background:#1c1c1c;color:#fffdf8;text-decoration:none;padding:12px 22px;font-family:Georgia,'Times New Roman',serif;font-size:14px;letter-spacing:0.02em;">Acompanhar pedido</a>
                 </p>
-                <p style="margin:0 0 20px;color:#5a574f;font-size:14px;">A atualização do rastreamento pelos Correios pode levar algum tempo para aparecer.</p>
                 <p style="margin:0;">Obrigado,<br />Robson Santiago</p>
               </td>
             </tr>
@@ -88,12 +122,12 @@ export function buildBuyerShippedEmail(input: {
   return { subject, html, text };
 }
 
-export async function sendBuyerShippedEmail(
-  ctx: BuyerShippedOrderContext,
+export async function sendBuyerOrderConfirmedEmail(
+  ctx: BuyerOrderConfirmedContext,
   trackingPageUrl: string,
   env: NodeJS.Dict<string> = process.env,
   deps?: { send?: EmailSendAdapter },
-): Promise<SendBuyerShippedEmailResult> {
+): Promise<SendBuyerOrderConfirmedEmailResult> {
   const apiKey = getResendApiKey(env);
   if (!apiKey) {
     return { ok: false, code: "RESEND_NOT_CONFIGURED" };
@@ -110,16 +144,16 @@ export async function sendBuyerShippedEmail(
     return { ok: false, code: "TRACKING_URL_INVALID" };
   }
 
-  const tracking = ctx.trackingCode?.trim() ?? "";
   const customerEmail = ctx.customerEmail.trim();
-  if (!tracking || !isUsableEmail(customerEmail)) {
+  if (!isUsableEmail(customerEmail)) {
     return { ok: false, code: "EMAIL_INPUT_INVALID" };
   }
 
-  const content = buildBuyerShippedEmail({
+  const content = buildBuyerOrderConfirmedEmail({
     customerName: ctx.customerName,
     friendlyCode: friendlyOrderCode(ctx.publicId),
-    trackingCode: tracking,
+    items: ctx.items,
+    totalCents: ctx.totalCents,
     trackingPageUrl,
   });
 
@@ -138,12 +172,12 @@ export async function sendBuyerShippedEmail(
   try {
     const result = await send(payload);
     if (!result.ok) {
-      console.error("buyer_shipped_email_failed", { code: "EMAIL_SEND_FAILED" });
+      console.error("buyer_order_confirmed_email_failed", { code: "EMAIL_SEND_FAILED" });
       return { ok: false, code: "EMAIL_SEND_FAILED" };
     }
     return { ok: true, providerMessageId: result.providerMessageId ?? null };
   } catch {
-    console.error("buyer_shipped_email_failed", { code: "EMAIL_SEND_FAILED" });
+    console.error("buyer_order_confirmed_email_failed", { code: "EMAIL_SEND_FAILED" });
     return { ok: false, code: "EMAIL_SEND_FAILED" };
   }
 }

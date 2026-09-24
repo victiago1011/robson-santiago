@@ -190,6 +190,7 @@ async function handle(
   getCalls: { count: number; ids: string[] },
   ensureDigitalDeliveries: (orderId: string) => Promise<void> = async () => undefined,
   notifyAdminPhysicalSale?: (orderId: string) => Promise<void>,
+  notifyBuyerOrderConfirmed?: (orderId: string) => Promise<void>,
 ) {
   return handleMercadoPagoWebhook(
     request,
@@ -209,6 +210,7 @@ async function handle(
       store,
       ensureDigitalDeliveries,
       notifyAdminPhysicalSale,
+      notifyBuyerOrderConfirmed,
     },
   );
 }
@@ -950,4 +952,31 @@ test("falha do e-book ainda chama notificação admin e retorna 503 só pelo e-b
   assert.equal(result.code, "DIGITAL_DELIVERY_FAILED");
   assert.equal(order?.paymentStatus, "approved");
   assert.deepEqual(notifyCalls, [ORDER_ID]);
+});
+
+test("falha do buyer_order_confirmed não altera pagamento nem bloqueia ebook", async () => {
+  const { store, order } = mockStore();
+  let digitalCalls = 0;
+  let confirmedCalls = 0;
+  const result = await handle(
+    signedRequest(),
+    async () => mpOrder(),
+    store,
+    { count: 0, ids: [] },
+    async () => {
+      digitalCalls += 1;
+    },
+    async () => undefined,
+    async () => {
+      confirmedCalls += 1;
+      throw new Error("buyer_email_down");
+    },
+  );
+  assert.equal(result.ok, true);
+  assert.equal(result.status, 200);
+  assert.equal(result.code, "RECONCILED");
+  assert.equal(order?.paymentStatus, "approved");
+  assert.equal(order?.fulfillmentStatus, "pending");
+  assert.equal(digitalCalls, 1);
+  assert.equal(confirmedCalls, 1);
 });

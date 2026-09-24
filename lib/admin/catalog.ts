@@ -88,6 +88,8 @@ const EVENT_LABELS: Record<string, string> = {
   fulfillment_shipped: "Pedido postado",
   admin_physical_sale_email_sent: "Notificação administrativa enviada",
   admin_physical_sale_email_failed: "Falha na notificação administrativa",
+  buyer_order_confirmed_email_sent: "E-mail de confirmação enviado ao comprador",
+  buyer_order_confirmed_email_failed: "Falha no e-mail de confirmação ao comprador",
   buyer_shipped_email_sent: "E-mail de postagem enviado",
   buyer_shipped_email_failed: "Falha no e-mail de postagem",
 };

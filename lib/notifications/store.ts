@@ -5,6 +5,7 @@ import { ORDER_EMAIL_STALE_CLAIM_MS } from "@/lib/notifications/stale";
 import { getSupabase } from "@/lib/supabase/server";
 import type {
   AdminPhysicalSaleOrderContext,
+  BuyerOrderConfirmedContext,
   BuyerShippedOrderContext,
   ClaimOrderEmailSendResult,
   OrderEmailNotificationKind,
@@ -42,7 +43,11 @@ function asStatus(value: string): OrderEmailNotificationStatus {
 }
 
 function asKind(value: string): OrderEmailNotificationKind {
-  if (value === "admin_physical_sale" || value === "buyer_shipped") {
+  if (
+    value === "admin_physical_sale" ||
+    value === "buyer_shipped" ||
+    value === "buyer_order_confirmed"
+  ) {
     return value;
   }
   throw new Error("INVALID_EMAIL_NOTIFICATION_KIND");
@@ -361,6 +366,51 @@ export const supabaseOrderEmailNotificationStore: OrderEmailNotificationStore = 
       customerName: row.customer_name,
       trackingCode: row.tracking_code,
       shippedAt: row.shipped_at,
+      items: row.order_items ?? [],
+    };
+  },
+
+  async findBuyerOrderConfirmedContext(orderId): Promise<BuyerOrderConfirmedContext | null> {
+    const { data, error } = await getSupabase()
+      .from("orders")
+      .select(
+        `
+        id,
+        public_id,
+        payment_status,
+        customer_name,
+        customer_email,
+        total_cents,
+        order_items ( sku, quantity, title )
+      `,
+      )
+      .eq("id", orderId)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+    if (!data) {
+      return null;
+    }
+
+    const row = data as {
+      id: string;
+      public_id: string;
+      payment_status: string;
+      customer_name: string;
+      customer_email: string;
+      total_cents: number | null;
+      order_items: Array<{ sku: string; quantity: number; title: string }> | null;
+    };
+
+    return {
+      orderId: row.id,
+      publicId: row.public_id,
+      paymentStatus: row.payment_status,
+      customerName: row.customer_name,
+      customerEmail: row.customer_email,
+      totalCents: row.total_cents,
       items: row.order_items ?? [],
     };
   },

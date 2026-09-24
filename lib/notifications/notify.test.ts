@@ -6,10 +6,12 @@ import {
   ensureOrderEmailNotification,
 } from "@/lib/notifications/claim";
 import { notifyAdminPhysicalSale } from "@/lib/notifications/notify-admin-physical-sale";
+import { notifyBuyerOrderConfirmed } from "@/lib/notifications/notify-buyer-order-confirmed";
 import { notifyBuyerShipped } from "@/lib/notifications/notify-buyer-shipped";
 import { ORDER_EMAIL_STALE_CLAIM_MS, isStaleSendingClaim } from "@/lib/notifications/stale";
 import type {
   AdminPhysicalSaleOrderContext,
+  BuyerOrderConfirmedContext,
   BuyerShippedOrderContext,
   ClaimOrderEmailSendResult,
   OrderEmailNotificationKind,
@@ -17,11 +19,19 @@ import type {
   OrderEmailNotificationStatus,
   OrderEmailNotificationStore,
 } from "@/lib/notifications/types";
+import { createOrderTrackingAccess } from "@/lib/order-tracking/create";
+import type {
+  OrderTrackingAccessRow,
+  OrderTrackingOrderSnapshot,
+  OrderTrackingStore,
+} from "@/lib/order-tracking/types";
+import { resolveOrderTracking } from "@/lib/order-tracking/resolve";
 import { assertNoSensitiveFields } from "@/lib/payments/sanitize";
 
 const ORDER_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const PUBLIC_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const NOW = Date.parse("2026-09-23T12:00:00.000Z");
+const APP_URL = "https://www.robsonsantiago.com.br";
 
 type MemoryRow = {
   id: string;
@@ -52,6 +62,7 @@ function mapRow(row: MemoryRow): OrderEmailNotificationRow {
 function memoryStore(seed?: {
   adminContext?: AdminPhysicalSaleOrderContext | null;
   buyerContext?: BuyerShippedOrderContext | null;
+  confirmedContext?: BuyerOrderConfirmedContext | null;
   rows?: MemoryRow[];
 }): OrderEmailNotificationStore & {
   rows: MemoryRow[];
@@ -106,6 +117,19 @@ function memoryStore(seed?: {
           items: [{ sku: PHYSICAL_SKU, quantity: 1 }],
         } satisfies BuyerShippedOrderContext)
       : seed.buyerContext;
+
+  const confirmedContext =
+    seed?.confirmedContext === undefined
+      ? ({
+          orderId: ORDER_ID,
+          publicId: PUBLIC_ID,
+          paymentStatus: "approved",
+          customerName: "Maria",
+          customerEmail: "maria@example.com",
+          totalCents: 6490,
+          items: [{ sku: PHYSICAL_SKU, quantity: 1, title: "Livro" }],
+        } satisfies BuyerOrderConfirmedContext)
+      : seed.confirmedContext;
 
   return {
     rows,
@@ -192,8 +216,55 @@ function memoryStore(seed?: {
       }),
     findAdminPhysicalSaleContext: async () => adminContext,
     findBuyerShippedContext: async () => buyerContext,
+    findBuyerOrderConfirmedContext: async () => confirmedContext,
     insertOrderEvent: async (_orderId, eventType, metadata) => {
       events.push({ type: eventType, metadata });
+    },
+  };
+}
+
+function memoryTrackingStore(): OrderTrackingStore & {
+  accessRows: OrderTrackingAccessRow[];
+  issuedRawTokens: string[];
+} {
+  const accessRows: OrderTrackingAccessRow[] = [];
+  const issuedRawTokens: string[] = [];
+  let nextId = 1;
+  const order: OrderTrackingOrderSnapshot = {
+    orderId: ORDER_ID,
+    publicId: PUBLIC_ID,
+    paymentStatus: "approved",
+    fulfillmentStatus: "shipped",
+    customerName: "Maria",
+    shippingCity: "São Paulo",
+    shippingState: "SP",
+    trackingCode: "AB123456789BR",
+    items: [{ sku: PHYSICAL_SKU, title: "Livro", quantity: 1 }],
+  };
+
+  return {
+    accessRows,
+    issuedRawTokens,
+    async insertAccess({ orderId, tokenHash }) {
+      const id = `access-${nextId}`;
+      nextId += 1;
+      accessRows.push({
+        id,
+        orderId,
+        tokenHash,
+        revokedAt: null,
+        createdAt: new Date().toISOString(),
+      });
+      return { kind: "inserted", id };
+    },
+    async findAccessByTokenHash(tokenHash) {
+      return accessRows.find((row) => row.tokenHash === tokenHash) ?? null;
+    },
+    async findOrderSnapshot(orderId) {
+      return order.orderId === orderId ? order : null;
+    },
+    async orderHasPhysicalItem(orderId) {
+      return orderId === ORDER_ID;
     },
   };
 }
@@ -297,11 +368,103 @@ test("falha Resend marca failed e não inventa sent", async () => {
   assert.doesNotThrow(() => assertNoSensitiveFields(result));
 });
 
+test("buyer_order_confirmed é idempotente e cria autorização", async () => {
+  const emailStore = memoryStore();
+  const trackingStore = memoryTrackingStore();
+  const urls: string[] = [];
+  const first = await notifyBuyerOrderConfirmed(ORDER_ID, emailStore, trackingStore, {
+    nowMs: NOW,
+    env: { APP_URL },
+    sendEmail: async (_ctx, url) => {
+      urls.push(url);
+      return { ok: true, providerMessageId: "m1" };
+    },
+  });
+  const second = await notifyBuyerOrderConfirmed(ORDER_ID, emailStore, trackingStore, {
+    nowMs: NOW + 1,
+    env: { APP_URL },
+    sendEmail: async (_ctx, url) => {
+      urls.push(url);
+      return { ok: true, providerMessageId: "m2" };
+    },
+  });
+  assert.equal(first.status, "sent");
+  assert.equal(second.status, "already_sent");
+  assert.equal(urls.length, 1);
+  assert.equal(trackingStore.accessRows.length, 1);
+  assert.equal(urls[0]?.includes("/pedido/acompanhar/"), true);
+});
+
+test("buyer_order_confirmed ignora digital-only", async () => {
+  const emailStore = memoryStore({
+    confirmedContext: {
+      orderId: ORDER_ID,
+      publicId: PUBLIC_ID,
+      paymentStatus: "approved",
+      customerName: "Maria",
+      customerEmail: "maria@example.com",
+      totalCents: 1990,
+      items: [{ sku: DIGITAL_SKU, quantity: 1, title: "E-book" }],
+    },
+  });
+  const trackingStore = memoryTrackingStore();
+  const result = await notifyBuyerOrderConfirmed(ORDER_ID, emailStore, trackingStore, {
+    nowMs: NOW,
+    env: { APP_URL },
+    sendEmail: async () => {
+      throw new Error("should_not_send");
+    },
+  });
+  assert.equal(result.status, "skipped");
+  assert.equal(trackingStore.accessRows.length, 0);
+});
+
+test("notifyBuyerShipped inclui tracking+link e preserva auth anterior", async () => {
+  const emailStore = memoryStore();
+  const trackingStore = memoryTrackingStore();
+
+  const prior = await createOrderTrackingAccess(ORDER_ID, trackingStore);
+  assert.equal(prior.status, "created");
+  if (prior.status !== "created") {
+    return;
+  }
+
+  let shippedUrl = "";
+  const first = await notifyBuyerShipped(ORDER_ID, emailStore, {
+    nowMs: NOW,
+    env: { APP_URL },
+    trackingStore,
+    sendEmail: async (_ctx, url) => {
+      shippedUrl = url;
+      return { ok: true, providerMessageId: "m1" };
+    },
+  });
+  assert.equal(first.status, "sent");
+  assert.equal(shippedUrl.includes("/pedido/acompanhar/"), true);
+  assert.equal(trackingStore.accessRows.length, 2);
+  assert.equal(trackingStore.accessRows.every((row) => row.revokedAt === null), true);
+
+  const priorStillValid = await resolveOrderTracking(prior.rawToken, trackingStore);
+  assert.equal(priorStillValid.ok, true);
+
+  const second = await notifyBuyerShipped(ORDER_ID, emailStore, {
+    nowMs: NOW + 1,
+    env: { APP_URL },
+    trackingStore,
+    sendEmail: async () => ({ ok: true, providerMessageId: "m2" }),
+  });
+  assert.equal(second.status, "already_sent");
+  assert.equal(trackingStore.accessRows.length, 2);
+});
+
 test("notifyBuyerShipped é idempotente e exige shipped", async () => {
   const store = memoryStore();
+  const trackingStore = memoryTrackingStore();
   let sends = 0;
   const first = await notifyBuyerShipped(ORDER_ID, store, {
     nowMs: NOW,
+    env: { APP_URL },
+    trackingStore,
     sendEmail: async () => {
       sends += 1;
       return { ok: true, providerMessageId: "m1" };
@@ -309,6 +472,8 @@ test("notifyBuyerShipped é idempotente e exige shipped", async () => {
   });
   const second = await notifyBuyerShipped(ORDER_ID, store, {
     nowMs: NOW + 1,
+    env: { APP_URL },
+    trackingStore,
     sendEmail: async () => {
       sends += 1;
       return { ok: true, providerMessageId: "m2" };
@@ -333,6 +498,8 @@ test("notifyBuyerShipped é idempotente e exige shipped", async () => {
   });
   const skipped = await notifyBuyerShipped(ORDER_ID, notShipped, {
     nowMs: NOW,
+    env: { APP_URL },
+    trackingStore: memoryTrackingStore(),
     sendEmail: async () => ({ ok: true, providerMessageId: null }),
   });
   assert.equal(skipped.status, "skipped");
@@ -340,13 +507,15 @@ test("notifyBuyerShipped é idempotente e exige shipped", async () => {
 
 test("falha no e-mail de postagem marca failed sem depender de status shipped no store de e-mail", async () => {
   const store = memoryStore();
+  const trackingStore = memoryTrackingStore();
   const result = await notifyBuyerShipped(ORDER_ID, store, {
     nowMs: NOW,
+    env: { APP_URL },
+    trackingStore,
     sendEmail: async () => ({ ok: false, code: "EMAIL_SEND_FAILED" }),
   });
   assert.equal(result.status, "failed");
   assert.equal(store.rows[0]?.status, "failed");
-  // Context still reports shipped — email failure does not mutate fulfillment.
   const ctx = await store.findBuyerShippedContext(ORDER_ID);
   assert.equal(ctx?.fulfillmentStatus, "shipped");
 });

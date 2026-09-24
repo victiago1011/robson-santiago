@@ -1,4 +1,7 @@
-export type OrderEmailNotificationKind = "admin_physical_sale" | "buyer_shipped";
+export type OrderEmailNotificationKind =
+  | "admin_physical_sale"
+  | "buyer_shipped"
+  | "buyer_order_confirmed";
 
 export type OrderEmailNotificationStatus = "pending" | "sending" | "sent" | "failed";
 
@@ -57,6 +60,16 @@ export type BuyerShippedOrderContext = {
   items: Array<{ sku: string; quantity: number }>;
 };
 
+export type BuyerOrderConfirmedContext = {
+  orderId: string;
+  publicId: string;
+  paymentStatus: string;
+  customerName: string;
+  customerEmail: string;
+  totalCents: number | null;
+  items: Array<{ sku: string; quantity: number; title: string }>;
+};
+
 export type OrderEmailNotificationStore = {
   findNotification: (
     orderId: string,
@@ -76,6 +89,7 @@ export type OrderEmailNotificationStore = {
   markFailed: (notificationId: string) => Promise<boolean>;
   findAdminPhysicalSaleContext: (orderId: string) => Promise<AdminPhysicalSaleOrderContext | null>;
   findBuyerShippedContext: (orderId: string) => Promise<BuyerShippedOrderContext | null>;
+  findBuyerOrderConfirmedContext: (orderId: string) => Promise<BuyerOrderConfirmedContext | null>;
   insertOrderEvent: (
     orderId: string,
     eventType: string,

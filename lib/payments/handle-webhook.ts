@@ -30,6 +30,8 @@ export type WebhookDependencies = {
   ensureDigitalDeliveries: (orderId: string) => Promise<void>;
   /** Best-effort; must not throw in a way that undoes payment. Failures are swallowed. */
   notifyAdminPhysicalSale?: (orderId: string) => Promise<void>;
+  /** Best-effort buyer confirmation for physical orders. Must not undo payment or block ebook. */
+  notifyBuyerOrderConfirmed?: (orderId: string) => Promise<void>;
   now?: () => number;
 };
 
@@ -182,6 +184,17 @@ export async function handleMercadoPagoWebhook(
         } catch {
           console.error("admin_physical_sale_notify_failed", {
             code: "ADMIN_PHYSICAL_SALE_NOTIFY_FAILED",
+          });
+        }
+      }
+
+      // Buyer order confirmation is also best-effort and independent of ebook delivery.
+      if (deps.notifyBuyerOrderConfirmed) {
+        try {
+          await deps.notifyBuyerOrderConfirmed(decision.order.id);
+        } catch {
+          console.error("buyer_order_confirmed_notify_failed", {
+            code: "BUYER_ORDER_CONFIRMED_NOTIFY_FAILED",
           });
         }
       }

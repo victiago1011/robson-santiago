@@ -8,15 +8,15 @@ import {
   recordOrderEmailProviderAccepted,
 } from "@/lib/notifications/claim";
 import {
-  sendBuyerShippedEmail,
-  type SendBuyerShippedEmailResult,
-} from "@/lib/notifications/buyer-shipped-email";
+  sendBuyerOrderConfirmedEmail,
+  type SendBuyerOrderConfirmedEmailResult,
+} from "@/lib/notifications/buyer-order-confirmed-email";
 import type { OrderEmailNotificationStore } from "@/lib/notifications/types";
 import { createOrderTrackingAccess } from "@/lib/order-tracking/create";
 import { buildOrderTrackingUrl } from "@/lib/order-tracking/policy";
 import type { OrderTrackingStore } from "@/lib/order-tracking/types";
 
-export type NotifyBuyerShippedResult =
+export type NotifyBuyerOrderConfirmedResult =
   | { status: "sent" }
   | { status: "already_sent" }
   | { status: "already_sending" }
@@ -24,16 +24,15 @@ export type NotifyBuyerShippedResult =
   | { status: "failed"; code: string }
   | { status: "accepted_unconfirmed" };
 
-export type NotifyBuyerShippedDeps = {
+export type NotifyBuyerOrderConfirmedDeps = {
   env?: NodeJS.Dict<string>;
   nowMs?: number;
   sendEmail?: (
-    ctx: Parameters<typeof sendBuyerShippedEmail>[0],
+    ctx: Parameters<typeof sendBuyerOrderConfirmedEmail>[0],
     trackingPageUrl: string,
-  ) => Promise<SendBuyerShippedEmailResult>;
+  ) => Promise<SendBuyerOrderConfirmedEmailResult>;
   markSentAttempts?: number;
   createTrackingAccess?: typeof createOrderTrackingAccess;
-  trackingStore?: OrderTrackingStore;
 };
 
 const DEFAULT_MARK_SENT_ATTEMPTS = 3;
@@ -55,38 +54,38 @@ async function withRetries(attempts: number, fn: () => Promise<boolean>): Promis
   return false;
 }
 
-export async function notifyBuyerShipped(
+/**
+ * Best-effort buyer confirmation after payment approval for physical orders.
+ * Creates a new tracking authorization for the CTA. Does not revoke prior tokens.
+ * Never throws for handled send failures; webhook wiring must still catch unexpected errors.
+ */
+export async function notifyBuyerOrderConfirmed(
   orderId: string,
-  store: OrderEmailNotificationStore,
-  deps: NotifyBuyerShippedDeps = {},
-): Promise<NotifyBuyerShippedResult> {
+  emailStore: OrderEmailNotificationStore,
+  trackingStore: OrderTrackingStore,
+  deps: NotifyBuyerOrderConfirmedDeps = {},
+): Promise<NotifyBuyerOrderConfirmedResult> {
   const nowMs = deps.nowMs ?? Date.now();
   const markSentAttempts = deps.markSentAttempts ?? DEFAULT_MARK_SENT_ATTEMPTS;
   const env = deps.env ?? process.env;
 
-  const ctx = await store.findBuyerShippedContext(orderId);
+  const ctx = await emailStore.findBuyerOrderConfirmedContext(orderId);
   if (!ctx) {
     return { status: "skipped", reason: "order_not_found" };
   }
   if (ctx.paymentStatus !== "approved") {
     return { status: "skipped", reason: "payment_not_approved" };
   }
-  if (ctx.fulfillmentStatus !== "shipped") {
-    return { status: "skipped", reason: "not_shipped" };
-  }
   if (!hasPhysicalBook(ctx.items)) {
     return { status: "skipped", reason: "no_physical_item" };
   }
-  if (!ctx.trackingCode?.trim()) {
-    return { status: "skipped", reason: "missing_tracking_code" };
-  }
 
-  const ensured = await ensureOrderEmailNotification(orderId, "buyer_shipped", store);
+  const ensured = await ensureOrderEmailNotification(orderId, "buyer_order_confirmed", emailStore);
   if ("skipped" in ensured) {
     return { status: "skipped", reason: ensured.reason };
   }
 
-  const claimed = await claimOrderEmailForSend(ensured.notificationId, store, nowMs);
+  const claimed = await claimOrderEmailForSend(ensured.notificationId, emailStore, nowMs);
   if (claimed.status === "already_sent") {
     return { status: "already_sent" };
   }
@@ -98,7 +97,7 @@ export async function notifyBuyerShipped(
   }
   if (claimed.status === "provider_accepted") {
     const marked = await withRetries(markSentAttempts, () =>
-      markOrderEmailSent(claimed.notificationId, store, nowMs),
+      markOrderEmailSent(claimed.notificationId, emailStore, nowMs),
     );
     if (marked) {
       return { status: "sent" };
@@ -106,25 +105,15 @@ export async function notifyBuyerShipped(
     return { status: "accepted_unconfirmed" };
   }
 
-  const trackingStore = deps.trackingStore;
-  if (!trackingStore) {
-    try {
-      await markOrderEmailFailed(claimed.notificationId, store);
-    } catch {
-      console.error("order_email_notification", { code: "EMAIL_MARK_FAILED_ERROR" });
-    }
-    return { status: "failed", code: "TRACKING_STORE_REQUIRED" };
-  }
-
   const appUrl = getAppUrl(env);
   if (!appUrl) {
     try {
-      await markOrderEmailFailed(claimed.notificationId, store);
+      await markOrderEmailFailed(claimed.notificationId, emailStore);
     } catch {
       console.error("order_email_notification", { code: "EMAIL_MARK_FAILED_ERROR" });
     }
     try {
-      await store.insertOrderEvent(orderId, "buyer_shipped_email_failed", {
+      await emailStore.insertOrderEvent(orderId, "buyer_order_confirmed_email_failed", {
         code: "APP_URL_INVALID",
       });
     } catch {
@@ -133,17 +122,16 @@ export async function notifyBuyerShipped(
     return { status: "failed", code: "APP_URL_INVALID" };
   }
 
-  // Prior confirmation-email tokens stay valid: create a new authorization for this CTA.
   const createAccess = deps.createTrackingAccess ?? createOrderTrackingAccess;
   const access = await createAccess(orderId, trackingStore);
   if (access.status !== "created") {
     try {
-      await markOrderEmailFailed(claimed.notificationId, store);
+      await markOrderEmailFailed(claimed.notificationId, emailStore);
     } catch {
       console.error("order_email_notification", { code: "EMAIL_MARK_FAILED_ERROR" });
     }
     try {
-      await store.insertOrderEvent(orderId, "buyer_shipped_email_failed", {
+      await emailStore.insertOrderEvent(orderId, "buyer_order_confirmed_email_failed", {
         code: access.reason,
       });
     } catch {
@@ -156,9 +144,9 @@ export async function notifyBuyerShipped(
 
   const sendEmail =
     deps.sendEmail ??
-    ((context, url) => sendBuyerShippedEmail(context, url, env));
+    ((context, url) => sendBuyerOrderConfirmedEmail(context, url, env));
 
-  let sendResult: SendBuyerShippedEmailResult;
+  let sendResult: SendBuyerOrderConfirmedEmailResult;
   try {
     sendResult = await sendEmail(ctx, trackingPageUrl);
   } catch {
@@ -167,12 +155,12 @@ export async function notifyBuyerShipped(
 
   if (!sendResult.ok) {
     try {
-      await markOrderEmailFailed(claimed.notificationId, store);
+      await markOrderEmailFailed(claimed.notificationId, emailStore);
     } catch {
       console.error("order_email_notification", { code: "EMAIL_MARK_FAILED_ERROR" });
     }
     try {
-      await store.insertOrderEvent(orderId, "buyer_shipped_email_failed", {
+      await emailStore.insertOrderEvent(orderId, "buyer_order_confirmed_email_failed", {
         code: sendResult.code,
       });
     } catch {
@@ -185,18 +173,18 @@ export async function notifyBuyerShipped(
     recordOrderEmailProviderAccepted(
       claimed.notificationId,
       sendResult.providerMessageId,
-      store,
+      emailStore,
       nowMs,
     ),
   );
 
   const markedSent = await withRetries(markSentAttempts, () =>
-    markOrderEmailSent(claimed.notificationId, store, nowMs),
+    markOrderEmailSent(claimed.notificationId, emailStore, nowMs),
   );
 
   if (markedSent) {
     try {
-      await store.insertOrderEvent(orderId, "buyer_shipped_email_sent", {});
+      await emailStore.insertOrderEvent(orderId, "buyer_order_confirmed_email_sent", {});
     } catch {
       console.error("order_email_notification", { code: "EVENT_INSERT_FAILED" });
     }
@@ -208,9 +196,24 @@ export async function notifyBuyerShipped(
   }
 
   try {
-    await markOrderEmailFailed(claimed.notificationId, store);
+    await markOrderEmailFailed(claimed.notificationId, emailStore);
   } catch {
     console.error("order_email_notification", { code: "EMAIL_MARK_FAILED_ERROR" });
   }
   return { status: "failed", code: "EMAIL_STATUS_UNCONFIRMED" };
+}
+
+/** Webhook-safe wrapper: never throws. */
+export async function notifyBuyerOrderConfirmedSafe(
+  orderId: string,
+  emailStore: OrderEmailNotificationStore,
+  trackingStore: OrderTrackingStore,
+  deps: NotifyBuyerOrderConfirmedDeps = {},
+): Promise<NotifyBuyerOrderConfirmedResult> {
+  try {
+    return await notifyBuyerOrderConfirmed(orderId, emailStore, trackingStore, deps);
+  } catch {
+    console.error("buyer_order_confirmed_notify_failed", { code: "NOTIFY_UNEXPECTED_ERROR" });
+    return { status: "failed", code: "NOTIFY_UNEXPECTED_ERROR" };
+  }
 }

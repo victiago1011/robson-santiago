@@ -7,6 +7,11 @@ import {
   sendAdminPhysicalSaleEmail,
 } from "@/lib/notifications/admin-physical-sale-email";
 import {
+  BUYER_ORDER_CONFIRMED_EMAIL_SUBJECT,
+  buildBuyerOrderConfirmedEmail,
+  sendBuyerOrderConfirmedEmail,
+} from "@/lib/notifications/buyer-order-confirmed-email";
+import {
   BUYER_SHIPPED_EMAIL_SUBJECT,
   buildBuyerShippedEmail,
   sendBuyerShippedEmail,
@@ -14,6 +19,7 @@ import {
 import type { EmailSendPayload } from "@/lib/digital-delivery/ebook-email";
 import type {
   AdminPhysicalSaleOrderContext,
+  BuyerOrderConfirmedContext,
   BuyerShippedOrderContext,
 } from "@/lib/notifications/types";
 import { DIGITAL_SKU, PHYSICAL_SKU } from "@/lib/commerce/selection";
@@ -23,6 +29,7 @@ import { assertNoSensitiveFields } from "@/lib/payments/sanitize";
 const ORDER_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const PUBLIC_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const APP_URL = "https://www.robsonsantiago.com.br";
+const TRACKING_URL = `${APP_URL}/pedido/acompanhar/tok_test_1`;
 const API_KEY = "re_test_placeholder_key";
 
 function adminCtx(
@@ -62,6 +69,21 @@ function buyerCtx(overrides?: Partial<BuyerShippedOrderContext>): BuyerShippedOr
     trackingCode: "AB123456789BR",
     shippedAt: "2026-09-23T15:00:00.000Z",
     items: [{ sku: PHYSICAL_SKU, quantity: 1 }],
+    ...overrides,
+  };
+}
+
+function confirmedCtx(
+  overrides?: Partial<BuyerOrderConfirmedContext>,
+): BuyerOrderConfirmedContext {
+  return {
+    orderId: ORDER_ID,
+    publicId: PUBLIC_ID,
+    paymentStatus: "approved",
+    customerName: "Maria Silva",
+    customerEmail: "maria@example.com",
+    totalCents: 6490,
+    items: [{ sku: PHYSICAL_SKU, quantity: 1, title: "A Vida é um Dia" }],
     ...overrides,
   };
 }
@@ -119,20 +141,49 @@ test("sendAdminPhysicalSaleEmail falha sem Resend/APP_URL", async () => {
   assert.equal(noApp.ok, false);
 });
 
-test("template buyer shipped inclui rastreio e aviso dos Correios", () => {
+test("template buyer confirmed inclui total, prazo e CTA", () => {
+  const content = buildBuyerOrderConfirmedEmail({
+    customerName: "Maria Silva",
+    friendlyCode: "#BBBBBBBB",
+    items: confirmedCtx().items,
+    totalCents: 6490,
+    trackingPageUrl: TRACKING_URL,
+  });
+  assert.equal(content.subject, BUYER_ORDER_CONFIRMED_EMAIL_SUBJECT);
+  assert.equal(content.text.includes("Pagamento confirmado"), true);
+  assert.equal(content.text.includes("Postagem em até 3 dias úteis"), true);
+  assert.equal(content.text.includes(TRACKING_URL), true);
+  assert.equal(content.html.includes("Acompanhar pedido"), true);
+});
+
+test("sendBuyerOrderConfirmedEmail envia ao customer_email", async () => {
+  const { captured, send } = captureSend();
+  const result = await sendBuyerOrderConfirmedEmail(confirmedCtx(), TRACKING_URL, env(), {
+    send,
+  });
+  assert.equal(result.ok, true);
+  assert.equal(captured.payload?.to, "maria@example.com");
+  assert.equal(captured.payload?.subject, BUYER_ORDER_CONFIRMED_EMAIL_SUBJECT);
+  assert.doesNotThrow(() => assertNoSensitiveFields(result));
+});
+
+test("template buyer shipped inclui rastreio e CTA de acompanhamento", () => {
   const content = buildBuyerShippedEmail({
     customerName: "Maria Silva",
     friendlyCode: "#BBBBBBBB",
     trackingCode: "AB123456789BR",
+    trackingPageUrl: TRACKING_URL,
   });
   assert.equal(content.subject, BUYER_SHIPPED_EMAIL_SUBJECT);
   assert.equal(content.text.includes("AB123456789BR"), true);
+  assert.equal(content.text.includes(TRACKING_URL), true);
+  assert.equal(content.html.includes("Acompanhar pedido"), true);
   assert.equal(content.text.includes("pode levar algum tempo"), true);
 });
 
 test("sendBuyerShippedEmail envia ao customer_email", async () => {
   const { captured, send } = captureSend();
-  const result = await sendBuyerShippedEmail(buyerCtx(), env(), { send });
+  const result = await sendBuyerShippedEmail(buyerCtx(), TRACKING_URL, env(), { send });
   assert.equal(result.ok, true);
   assert.equal(captured.payload?.to, "maria@example.com");
   assert.equal(captured.payload?.subject, BUYER_SHIPPED_EMAIL_SUBJECT);
@@ -143,6 +194,7 @@ test("sendBuyerShippedEmail rejeita rastreio/e-mail inválidos", async () => {
   const { send } = captureSend();
   const result = await sendBuyerShippedEmail(
     buyerCtx({ trackingCode: null }),
+    TRACKING_URL,
     env(),
     { send },
   );

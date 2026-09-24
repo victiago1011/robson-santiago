@@ -17,6 +17,7 @@ import {
 import { notifyBuyerShipped } from "@/lib/notifications/notify-buyer-shipped";
 import { notifyAdminPhysicalSale } from "@/lib/notifications/notify-admin-physical-sale";
 import { supabaseOrderEmailNotificationStore } from "@/lib/notifications/store";
+import { supabaseOrderTrackingStore } from "@/lib/order-tracking/store";
 import { ORDER_EMAIL_STALE_CLAIM_MS, isStaleSendingClaim } from "@/lib/notifications/stale";
 
 const UNAUTHORIZED = "Acesso não autorizado.";
@@ -141,7 +142,9 @@ export async function confirmOrderShipment(
     });
 
     try {
-      await notifyBuyerShipped(orderId, supabaseOrderEmailNotificationStore);
+      await notifyBuyerShipped(orderId, supabaseOrderEmailNotificationStore, {
+        trackingStore: supabaseOrderTrackingStore,
+      });
     } catch {
       console.error("buyer_shipped_notify_failed", { code: "NOTIFY_UNEXPECTED_ERROR" });
     }
@@ -255,7 +258,9 @@ export async function resendBuyerShippedEmail(
       }
     }
 
-    const result = await notifyBuyerShipped(orderId, supabaseOrderEmailNotificationStore);
+    const result = await notifyBuyerShipped(orderId, supabaseOrderEmailNotificationStore, {
+      trackingStore: supabaseOrderTrackingStore,
+    });
     revalidateOrder(orderId);
     if (result.status === "sent" || result.status === "already_sent") {
       return success();

@@ -1,6 +1,6 @@
-import type { TimelineStepState } from "@/lib/order-tracking/types";
+import type { OrderTrackingTimelineStep } from "@/lib/order-tracking/types";
 
-function StepIcon({ state }: { state: TimelineStepState }) {
+function StepIcon({ state }: { state: OrderTrackingTimelineStep["state"] }) {
   if (state === "done") {
     return (
       <span
@@ -34,16 +34,21 @@ function StepIcon({ state }: { state: TimelineStepState }) {
 }
 
 type TrackingTimelineProps = {
-  steps: Array<{ id: string; label: string; state: TimelineStepState }>;
+  steps: OrderTrackingTimelineStep[];
   trackingCode: string | null;
+  correiosTrackingUrl: string | null;
 };
 
-export default function TrackingTimeline({ steps, trackingCode }: TrackingTimelineProps) {
+export default function TrackingTimeline({
+  steps,
+  trackingCode,
+  correiosTrackingUrl,
+}: TrackingTimelineProps) {
   return (
     <ol className="relative">
       {steps.map((step, index) => {
         const isLast = index === steps.length - 1;
-        const showTracking = step.id === "posted" && Boolean(trackingCode);
+        const showPostedDetails = step.id === "posted" && Boolean(trackingCode);
         const labelClass =
           step.state === "upcoming"
             ? "text-ink/40"
@@ -78,14 +83,31 @@ export default function TrackingTimeline({ steps, trackingCode }: TrackingTimeli
                 ) : null}
               </p>
 
-              {showTracking ? (
+              {step.occurredAt ? (
+                <p className="mt-1 font-sans text-xs leading-snug text-ink/45 md:text-[0.8rem]">
+                  {step.occurredAt}
+                </p>
+              ) : null}
+
+              {showPostedDetails ? (
                 <div className="mt-3 border border-rule bg-paper-strong px-4 py-3">
                   <p className="font-sans text-[0.65rem] tracking-[0.14em] text-ink/50 uppercase">
-                    Código de rastreio
+                    Entrega pelos Correios
                   </p>
-                  <p className="mt-1 font-mono text-sm tracking-wide text-ink md:text-base">
+                  <p className="mt-2 font-sans text-xs text-ink/55">Código</p>
+                  <p className="mt-0.5 font-mono text-sm tracking-wide text-ink md:text-base">
                     {trackingCode}
                   </p>
+                  {correiosTrackingUrl ? (
+                    <a
+                      href={correiosTrackingUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-3 inline-flex min-h-10 items-center font-sans text-[0.7rem] font-medium tracking-[0.12em] text-ink uppercase underline-offset-4 transition-colors hover:underline"
+                    >
+                      Acompanhar nos Correios ↗
+                    </a>
+                  ) : null}
                 </div>
               ) : null}
             </div>

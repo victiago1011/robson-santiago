@@ -239,6 +239,9 @@ function memoryTrackingStore(): OrderTrackingStore & {
     shippingCity: "São Paulo",
     shippingState: "SP",
     trackingCode: "AB123456789BR",
+    paidAt: "2026-09-25T13:15:00.000Z",
+    shippedAt: "2026-09-25T17:32:00.000Z",
+    preparingStartedAt: "2026-09-25T14:02:00.000Z",
     items: [{ id: "item-1", sku: PHYSICAL_SKU, title: "Livro", quantity: 1 }],
     digitalDeliveries: [],
   };

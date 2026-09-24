@@ -9,6 +9,7 @@ import {
   createOrderTrackingAccess,
   issueOrderTrackingAccess,
 } from "@/lib/order-tracking/create";
+import { buildCorreiosTrackingUrl, CORREIOS_TRACKING_BASE_URL } from "@/lib/order-tracking/correios-url";
 import {
   ORDER_TRACKING_PATH_PREFIX,
   buildOrderTrackingUrl,
@@ -25,7 +26,14 @@ import type {
   OrderTrackingOrderSnapshot,
   OrderTrackingStore,
 } from "@/lib/order-tracking/types";
-import { buildTrackingTimeline, toOrderTrackingPublicView, toPublicDigitalDeliveryStatus, trackingStatusMessage } from "@/lib/order-tracking/view-model";
+import {
+  buildTrackingTimeline,
+  formatTrackingDateTime,
+  toOrderTrackingPublicView,
+  toPublicDigitalDeliveryStatus,
+  trackingStatusMessage,
+} from "@/lib/order-tracking/view-model";
+import { mapOrderTrackingSnapshot } from "@/lib/order-tracking/snapshot-map";
 import { assertNoSensitiveFields } from "@/lib/payments/sanitize";
 
 const ORDER_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -43,6 +51,9 @@ function snapshot(overrides?: Partial<OrderTrackingOrderSnapshot>): OrderTrackin
     shippingCity: "São Paulo",
     shippingState: "SP",
     trackingCode: null,
+    paidAt: "2026-09-25T13:15:00.000Z",
+    shippedAt: null,
+    preparingStartedAt: null,
     items: [{ id: PHYSICAL_ITEM_ID, sku: PHYSICAL_SKU, title: "A Vida é um Dia", quantity: 1 }],
     digitalDeliveries: [],
     ...overrides,
@@ -253,6 +264,7 @@ test("DTO público não contém PII proibida", () => {
       customerName: "Maria Silva Santos",
       trackingCode: "AB123456789BR",
       fulfillmentStatus: "shipped",
+      shippedAt: "2026-09-25T17:32:00.000Z",
     }),
   );
   assert.equal(view.firstName, "Maria");
@@ -267,6 +279,10 @@ test("DTO público não contém PII proibida", () => {
   assert.equal(view.city, "São Paulo");
   assert.equal(view.region, "SP");
   assert.equal(view.trackingCode, "AB123456789BR");
+  assert.equal(
+    view.correiosTrackingUrl,
+    `${CORREIOS_TRACKING_BASE_URL}?objeto=AB123456789BR`,
+  );
   assert.equal(view.friendlyCode, "#43293FA5");
   assert.equal(view.statusMessage, "Seu pedido está a caminho.");
   assert.equal(view.items[0]?.kind, "physical");
@@ -281,6 +297,8 @@ test("DTO público não contém PII proibida", () => {
   assert.equal(json.includes("token"), false);
   assert.equal(json.includes("token_hash"), false);
   assert.equal(json.includes("digital_file"), false);
+  assert.equal(json.includes("order_events"), false);
+  assert.equal(json.includes("paid_at"), false);
 });
 
 test("e-book no resumo usa digital_deliveries real, não só a presença do SKU", () => {
@@ -350,27 +368,127 @@ test("e-book no resumo usa digital_deliveries real, não só a presença do SKU"
   assert.equal(trackingStatusMessage("delivered"), "Seu pedido foi entregue.");
 });
 
-test("timeline cobre pending preparing shipped delivered sem marcar Correios futuros", () => {
-  const pending = buildTrackingTimeline("pending");
+test("timeline pública tem exatamente 3 etapas com datas e delivered marca todas done", () => {
+  const pending = buildTrackingTimeline("pending", {
+    paidAt: "2026-09-25T13:15:00.000Z",
+  });
+  assert.equal(pending.length, 3);
+  assert.deepEqual(
+    pending.map((s) => s.id),
+    ["payment_confirmed", "preparation", "posted"],
+  );
   assert.equal(pending.find((s) => s.id === "preparation")?.state, "current");
   assert.equal(pending.find((s) => s.id === "preparation")?.label, "Aguardando preparação");
-  assert.equal(pending.find((s) => s.id === "in_transit")?.state, "upcoming");
-  assert.equal(pending.find((s) => s.id === "out_for_delivery")?.state, "upcoming");
+  assert.equal(pending.find((s) => s.id === "posted")?.state, "upcoming");
+  assert.equal(
+    pending.find((s) => s.id === "payment_confirmed")?.occurredAt,
+    formatTrackingDateTime("2026-09-25T13:15:00.000Z"),
+  );
+  assert.equal(pending.some((s) => s.id === "in_transit"), false);
+  assert.equal(pending.some((s) => s.id === "out_for_delivery"), false);
+  assert.equal(pending.some((s) => s.id === "delivered"), false);
 
-  const preparing = buildTrackingTimeline("preparing");
+  const preparing = buildTrackingTimeline("preparing", {
+    paidAt: "2026-09-25T13:15:00.000Z",
+    preparingStartedAt: "2026-09-25T14:02:00.000Z",
+  });
   assert.equal(preparing.find((s) => s.id === "preparation")?.label, "Preparando seu pedido");
   assert.equal(preparing.find((s) => s.id === "preparation")?.state, "current");
   assert.equal(preparing.find((s) => s.id === "payment_confirmed")?.state, "done");
+  assert.equal(
+    preparing.find((s) => s.id === "preparation")?.occurredAt,
+    formatTrackingDateTime("2026-09-25T14:02:00.000Z"),
+  );
 
-  const shipped = buildTrackingTimeline("shipped");
+  const shipped = buildTrackingTimeline("shipped", {
+    paidAt: "2026-09-25T13:15:00.000Z",
+    preparingStartedAt: "2026-09-25T14:02:00.000Z",
+    shippedAt: "2026-09-25T17:32:00.000Z",
+  });
   assert.equal(shipped.find((s) => s.id === "posted")?.state, "current");
-  assert.equal(shipped.find((s) => s.id === "in_transit")?.state, "upcoming");
-  assert.equal(shipped.find((s) => s.id === "delivered")?.state, "upcoming");
+  assert.equal(shipped.find((s) => s.id === "preparation")?.state, "done");
+  assert.equal(
+    shipped.find((s) => s.id === "posted")?.occurredAt,
+    formatTrackingDateTime("2026-09-25T17:32:00.000Z"),
+  );
 
-  const delivered = buildTrackingTimeline("delivered");
-  assert.equal(delivered.find((s) => s.id === "delivered")?.state, "done");
-  assert.equal(delivered.find((s) => s.id === "in_transit")?.state, "upcoming");
-  assert.equal(delivered.find((s) => s.id === "out_for_delivery")?.state, "upcoming");
+  const delivered = buildTrackingTimeline("delivered", {
+    paidAt: "2026-09-25T13:15:00.000Z",
+    preparingStartedAt: "2026-09-25T14:02:00.000Z",
+    shippedAt: "2026-09-25T17:32:00.000Z",
+  });
+  assert.equal(delivered.length, 3);
+  assert.equal(delivered.every((s) => s.state === "done"), true);
+  assert.equal(delivered.some((s) => s.id === "delivered"), false);
+});
+
+test("tracking code e URL Correios só após postagem; helper valida código", () => {
+  assert.equal(buildCorreiosTrackingUrl(null), null);
+  assert.equal(buildCorreiosTrackingUrl(""), null);
+  assert.equal(buildCorreiosTrackingUrl("INVALID"), null);
+  assert.equal(
+    buildCorreiosTrackingUrl(" ab-123456789-br "),
+    `${CORREIOS_TRACKING_BASE_URL}?objeto=AB123456789BR`,
+  );
+
+  const beforeShip = toOrderTrackingPublicView(
+    snapshot({
+      fulfillmentStatus: "preparing",
+      trackingCode: "AB123456789BR",
+    }),
+  );
+  assert.equal(beforeShip.trackingCode, null);
+  assert.equal(beforeShip.correiosTrackingUrl, null);
+
+  const shipped = toOrderTrackingPublicView(
+    snapshot({
+      fulfillmentStatus: "shipped",
+      trackingCode: "AB123456789BR",
+      shippedAt: "2026-09-25T17:32:00.000Z",
+    }),
+  );
+  assert.equal(shipped.trackingCode, "AB123456789BR");
+  assert.equal(
+    shipped.correiosTrackingUrl,
+    `${CORREIOS_TRACKING_BASE_URL}?objeto=AB123456789BR`,
+  );
+
+  const delivered = toOrderTrackingPublicView(
+    snapshot({
+      fulfillmentStatus: "delivered",
+      trackingCode: "AB123456789BR",
+      shippedAt: "2026-09-25T17:32:00.000Z",
+    }),
+  );
+  assert.equal(delivered.trackingCode, "AB123456789BR");
+  assert.equal(delivered.correiosTrackingUrl?.includes("objeto=AB123456789BR"), true);
+  assert.equal(delivered.timeline.every((s) => s.state === "done"), true);
+});
+
+test("mapOrderTrackingSnapshot usa paid_at shipped_at e evento de preparação", () => {
+  const mapped = mapOrderTrackingSnapshot({
+    id: ORDER_ID,
+    public_id: PUBLIC_ID,
+    payment_status: "approved",
+    fulfillment_status: "shipped",
+    customer_name: "Maria",
+    shipping_city: "São Paulo",
+    shipping_state: "SP",
+    tracking_code: "AB123456789BR",
+    paid_at: "2026-09-25T13:15:00.000Z",
+    shipped_at: "2026-09-25T17:32:00.000Z",
+    order_items: [{ id: PHYSICAL_ITEM_ID, sku: PHYSICAL_SKU, title: "Livro", quantity: 1 }],
+    digital_deliveries: [],
+    order_events: [
+      { event_type: "order_created", created_at: "2026-09-25T12:00:00.000Z" },
+      { event_type: "fulfillment_preparing_started", created_at: "2026-09-25T15:00:00.000Z" },
+      { event_type: "fulfillment_preparing_started", created_at: "2026-09-25T14:02:00.000Z" },
+      { event_type: "fulfillment_shipped", created_at: "2026-09-25T17:32:00.000Z" },
+    ],
+  });
+  assert.equal(mapped.paidAt, "2026-09-25T13:15:00.000Z");
+  assert.equal(mapped.shippedAt, "2026-09-25T17:32:00.000Z");
+  assert.equal(mapped.preparingStartedAt, "2026-09-25T14:02:00.000Z");
 });
 
 test("normalizeTrackingToken e URL de acompanhamento", () => {
@@ -393,6 +511,7 @@ test("página e proxy configuram noindex e no-store", () => {
   assert.equal(pageSource.includes('dynamic = "force-dynamic"'), true);
   assert.equal(pageSource.includes("Pagamento confirmado"), false);
   assert.equal(pageSource.includes("TrackingTimeline"), true);
+  assert.equal(pageSource.includes("correiosTrackingUrl"), true);
   assert.equal(proxySource.includes("private, no-store"), true);
   assert.equal(proxySource.includes("noindex"), true);
   assert.equal(proxySource.includes("/pedido/acompanhar/"), true);

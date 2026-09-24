@@ -77,7 +77,11 @@ function TrackingView({ view }: { view: OrderTrackingPublicView }) {
             Acompanhamento
           </h2>
           <div className="mt-6 md:mt-7">
-            <TrackingTimeline steps={view.timeline} trackingCode={view.trackingCode} />
+            <TrackingTimeline
+              steps={view.timeline}
+              trackingCode={view.trackingCode}
+              correiosTrackingUrl={view.correiosTrackingUrl}
+            />
           </div>
         </section>
 

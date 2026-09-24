@@ -1,6 +1,11 @@
 import "server-only";
 
 import { PHYSICAL_SKU } from "@/lib/commerce/selection";
+import {
+  ORDER_TRACKING_SNAPSHOT_SELECT,
+  mapOrderTrackingSnapshot,
+  type OrderTrackingSnapshotDbRow,
+} from "@/lib/order-tracking/snapshot-map";
 import { getSupabase } from "@/lib/supabase/server";
 import type {
   OrderTrackingAccessRow,
@@ -59,20 +64,7 @@ export const supabaseOrderTrackingStore: OrderTrackingStore = {
   async findOrderSnapshot(orderId): Promise<OrderTrackingOrderSnapshot | null> {
     const { data, error } = await getSupabase()
       .from("orders")
-      .select(
-        `
-        id,
-        public_id,
-        payment_status,
-        fulfillment_status,
-        customer_name,
-        shipping_city,
-        shipping_state,
-        tracking_code,
-        order_items ( id, sku, title, quantity ),
-        digital_deliveries ( order_item_id, email_status, revoked_at, created_at )
-      `,
-      )
+      .select(ORDER_TRACKING_SNAPSHOT_SELECT)
       .eq("id", orderId)
       .maybeSingle();
 
@@ -83,46 +75,7 @@ export const supabaseOrderTrackingStore: OrderTrackingStore = {
       return null;
     }
 
-    const row = data as {
-      id: string;
-      public_id: string;
-      payment_status: string;
-      fulfillment_status: string;
-      customer_name: string;
-      shipping_city: string | null;
-      shipping_state: string | null;
-      tracking_code: string | null;
-      order_items: Array<{
-        id: string;
-        sku: string;
-        title: string;
-        quantity: number;
-      }> | null;
-      digital_deliveries: Array<{
-        order_item_id: string;
-        email_status: string;
-        revoked_at: string | null;
-        created_at: string;
-      }> | null;
-    };
-
-    return {
-      orderId: row.id,
-      publicId: row.public_id,
-      paymentStatus: row.payment_status,
-      fulfillmentStatus: row.fulfillment_status,
-      customerName: row.customer_name,
-      shippingCity: row.shipping_city,
-      shippingState: row.shipping_state,
-      trackingCode: row.tracking_code,
-      items: row.order_items ?? [],
-      digitalDeliveries: (row.digital_deliveries ?? []).map((delivery) => ({
-        orderItemId: delivery.order_item_id,
-        emailStatus: delivery.email_status,
-        revokedAt: delivery.revoked_at,
-        createdAt: delivery.created_at,
-      })),
-    };
+    return mapOrderTrackingSnapshot(data as OrderTrackingSnapshotDbRow);
   },
 
   async orderHasPhysicalItem(orderId) {

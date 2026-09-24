@@ -1,6 +1,7 @@
 import { friendlyOrderCode } from "@/lib/admin/orders";
 import { DIGITAL_BOOK, PHYSICAL_BOOK } from "@/lib/commerce/product";
 import { DIGITAL_SKU, PHYSICAL_SKU } from "@/lib/commerce/selection";
+import { buildCorreiosTrackingUrl } from "@/lib/order-tracking/correios-url";
 import type {
   OrderTrackingDigitalDeliveryFact,
   OrderTrackingOrderSnapshot,
@@ -30,44 +31,89 @@ function prepLabel(fulfillmentStatus: string): string {
   return "Preparando seu pedido";
 }
 
+/** Buyer-facing date under timeline steps — America/Sao_Paulo, e.g. "25/09/2026 às 14:32". */
+export function formatTrackingDateTime(iso: string | null | undefined): string | null {
+  if (!iso || typeof iso !== "string") {
+    return null;
+  }
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  const datePart = new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "America/Sao_Paulo",
+  }).format(date);
+  const timePart = new Intl.DateTimeFormat("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "America/Sao_Paulo",
+  }).format(date);
+  return `${datePart} às ${timePart}`;
+}
+
 function step(
   id: string,
   label: string,
   state: TimelineStepState,
+  occurredAt: string | null,
 ): OrderTrackingTimelineStep {
-  return { id, label, state };
+  return { id, label, state, occurredAt };
 }
 
 /**
- * Maps current fulfillment_status onto the buyer timeline.
- * "Em trânsito" and "Saiu para entrega" stay upcoming until Correios integration.
+ * Maps fulfillment_status onto the buyer timeline (3 public steps only).
+ * `delivered` in the DB still exists, but there is no visual "Entregue" step —
+ * all three steps render as done.
  */
-export function buildTrackingTimeline(fulfillmentStatus: string): OrderTrackingTimelineStep[] {
+export function buildTrackingTimeline(
+  fulfillmentStatus: string,
+  dates?: {
+    paidAt?: string | null;
+    preparingStartedAt?: string | null;
+    shippedAt?: string | null;
+  },
+): OrderTrackingTimelineStep[] {
   const status = fulfillmentStatus.trim();
   const shippedOrBeyond = status === "shipped" || status === "delivered";
-  const delivered = status === "delivered";
+  const fullyDone = status === "delivered";
 
   let prepState: TimelineStepState = "upcoming";
-  if (status === "pending" || status === "preparing") {
-    prepState = "current";
-  } else if (shippedOrBeyond) {
+  if (fullyDone || shippedOrBeyond) {
     prepState = "done";
+  } else if (status === "pending" || status === "preparing") {
+    prepState = "current";
   }
 
   let postedState: TimelineStepState = "upcoming";
-  if (status === "shipped") {
-    postedState = "current";
-  } else if (delivered) {
+  if (fullyDone) {
     postedState = "done";
+  } else if (status === "shipped") {
+    postedState = "current";
   }
 
   return [
-    step("payment_confirmed", "Pagamento confirmado", "done"),
-    step("preparation", prepLabel(status), prepState),
-    step("posted", "Postado", postedState),
-    step("in_transit", "Em trânsito", "upcoming"),
-    step("out_for_delivery", "Saiu para entrega", "upcoming"),
-    step("delivered", "Entregue", delivered ? "done" : "upcoming"),
+    step(
+      "payment_confirmed",
+      "Pagamento confirmado",
+      "done",
+      formatTrackingDateTime(dates?.paidAt ?? null),
+    ),
+    step(
+      "preparation",
+      prepLabel(status),
+      prepState,
+      formatTrackingDateTime(dates?.preparingStartedAt ?? null),
+    ),
+    step(
+      "posted",
+      "Postado",
+      postedState,
+      formatTrackingDateTime(dates?.shippedAt ?? null),
+    ),
   ];
 }
 
@@ -168,6 +214,10 @@ export function toOrderTrackingPublicView(
 
   const city = snapshot.shippingCity?.trim() || null;
   const region = snapshot.shippingState?.trim() || null;
+  const trackingVisible =
+    snapshot.fulfillmentStatus === "shipped" || snapshot.fulfillmentStatus === "delivered"
+      ? snapshot.trackingCode?.trim() || null
+      : null;
 
   return {
     friendlyCode: friendlyOrderCode(snapshot.publicId),
@@ -178,10 +228,12 @@ export function toOrderTrackingPublicView(
     items,
     paymentConfirmed: true,
     fulfillmentStatus: snapshot.fulfillmentStatus,
-    trackingCode:
-      snapshot.fulfillmentStatus === "shipped" || snapshot.fulfillmentStatus === "delivered"
-        ? snapshot.trackingCode?.trim() || null
-        : null,
-    timeline: buildTrackingTimeline(snapshot.fulfillmentStatus),
+    trackingCode: trackingVisible,
+    correiosTrackingUrl: trackingVisible ? buildCorreiosTrackingUrl(trackingVisible) : null,
+    timeline: buildTrackingTimeline(snapshot.fulfillmentStatus, {
+      paidAt: snapshot.paidAt,
+      preparingStartedAt: snapshot.preparingStartedAt,
+      shippedAt: snapshot.shippedAt,
+    }),
   };
 }

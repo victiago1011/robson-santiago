@@ -25,11 +25,13 @@ import type {
   OrderTrackingOrderSnapshot,
   OrderTrackingStore,
 } from "@/lib/order-tracking/types";
-import { buildTrackingTimeline, toOrderTrackingPublicView } from "@/lib/order-tracking/view-model";
+import { buildTrackingTimeline, toOrderTrackingPublicView, toPublicDigitalDeliveryStatus, trackingStatusMessage } from "@/lib/order-tracking/view-model";
 import { assertNoSensitiveFields } from "@/lib/payments/sanitize";
 
 const ORDER_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const PUBLIC_ID = "43293fa5-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+const PHYSICAL_ITEM_ID = "item-physical-1";
+const DIGITAL_ITEM_ID = "item-digital-1";
 
 function snapshot(overrides?: Partial<OrderTrackingOrderSnapshot>): OrderTrackingOrderSnapshot {
   return {
@@ -41,7 +43,8 @@ function snapshot(overrides?: Partial<OrderTrackingOrderSnapshot>): OrderTrackin
     shippingCity: "São Paulo",
     shippingState: "SP",
     trackingCode: null,
-    items: [{ sku: PHYSICAL_SKU, title: "A Vida é um Dia", quantity: 1 }],
+    items: [{ id: PHYSICAL_ITEM_ID, sku: PHYSICAL_SKU, title: "A Vida é um Dia", quantity: 1 }],
+    digitalDeliveries: [],
     ...overrides,
   };
 }
@@ -145,7 +148,7 @@ test("token revogado e inválido devolvem NOT_FOUND", async () => {
 test("digital-only não cria tracking", async () => {
   const store = memoryTrackingStore({
     order: snapshot({
-      items: [{ sku: DIGITAL_SKU, title: "E-book", quantity: 1 }],
+      items: [{ id: DIGITAL_ITEM_ID, sku: DIGITAL_SKU, title: "E-book", quantity: 1 }],
       shippingCity: null,
       shippingState: null,
     }),
@@ -234,7 +237,7 @@ test("issue via store ops path persiste só hash e rejeita digital/não aprovado
 
   const digitalOnly = memoryTrackingStore({
     order: snapshot({
-      items: [{ sku: DIGITAL_SKU, title: "E-book", quantity: 1 }],
+      items: [{ id: DIGITAL_ITEM_ID, sku: DIGITAL_SKU, title: "E-book", quantity: 1 }],
     }),
   });
   const skippedDigital = await issueOrderTrackingAccess(ORDER_ID, digitalOnly);
@@ -253,16 +256,98 @@ test("DTO público não contém PII proibida", () => {
     }),
   );
   assert.equal(view.firstName, "Maria");
+  assert.equal(
+    toOrderTrackingPublicView(snapshot({ customerName: "VICTOR HUGO" })).firstName,
+    "Victor",
+  );
+  assert.equal(
+    toOrderTrackingPublicView(snapshot({ customerName: "josé" })).firstName,
+    "José",
+  );
   assert.equal(view.city, "São Paulo");
   assert.equal(view.region, "SP");
   assert.equal(view.trackingCode, "AB123456789BR");
   assert.equal(view.friendlyCode, "#43293FA5");
+  assert.equal(view.statusMessage, "Seu pedido está a caminho.");
+  assert.equal(view.items[0]?.kind, "physical");
+  assert.equal(view.items[0]?.format, "Livro físico");
+  assert.equal(view.items[0]?.digitalDeliveryStatus, undefined);
   assert.doesNotThrow(() => assertNoSensitiveFields(view));
   const json = JSON.stringify(view);
   assert.equal(json.includes("01310100"), false);
   assert.equal(json.includes("Av Paulista"), false);
   assert.equal(json.includes("maria@"), false);
   assert.equal(json.includes("cpf"), false);
+  assert.equal(json.includes("token"), false);
+  assert.equal(json.includes("token_hash"), false);
+  assert.equal(json.includes("digital_file"), false);
+});
+
+test("e-book no resumo usa digital_deliveries real, não só a presença do SKU", () => {
+  const withoutDelivery = toOrderTrackingPublicView(
+    snapshot({
+      items: [
+        { id: PHYSICAL_ITEM_ID, sku: PHYSICAL_SKU, title: "A Vida é um Dia", quantity: 1 },
+        {
+          id: DIGITAL_ITEM_ID,
+          sku: DIGITAL_SKU,
+          title: "A Vida é um Dia — E-book",
+          quantity: 1,
+        },
+      ],
+      digitalDeliveries: [],
+    }),
+  );
+  const ebookPending = withoutDelivery.items.find((item) => item.kind === "digital");
+  assert.equal(ebookPending?.digitalDeliveryStatus, "pending");
+  assert.equal(ebookPending?.format, "E-book");
+
+  const withSent = toOrderTrackingPublicView(
+    snapshot({
+      items: [
+        { id: PHYSICAL_ITEM_ID, sku: PHYSICAL_SKU, title: "A Vida é um Dia", quantity: 1 },
+        {
+          id: DIGITAL_ITEM_ID,
+          sku: DIGITAL_SKU,
+          title: "A Vida é um Dia — E-book",
+          quantity: 1,
+        },
+      ],
+      digitalDeliveries: [
+        {
+          orderItemId: DIGITAL_ITEM_ID,
+          emailStatus: "sent",
+          revokedAt: null,
+          createdAt: "2026-01-02T00:00:00.000Z",
+        },
+      ],
+    }),
+  );
+  assert.equal(
+    withSent.items.find((item) => item.kind === "digital")?.digitalDeliveryStatus,
+    "delivered",
+  );
+
+  assert.equal(
+    toPublicDigitalDeliveryStatus({
+      orderItemId: DIGITAL_ITEM_ID,
+      emailStatus: "sending",
+      revokedAt: null,
+      createdAt: "2026-01-02T00:00:00.000Z",
+    }),
+    "processing",
+  );
+  assert.equal(
+    toPublicDigitalDeliveryStatus({
+      orderItemId: DIGITAL_ITEM_ID,
+      emailStatus: "failed",
+      revokedAt: null,
+      createdAt: "2026-01-02T00:00:00.000Z",
+    }),
+    "failed",
+  );
+  assert.equal(trackingStatusMessage("preparing"), "Seu pedido está sendo preparado.");
+  assert.equal(trackingStatusMessage("delivered"), "Seu pedido foi entregue.");
 });
 
 test("timeline cobre pending preparing shipped delivered sem marcar Correios futuros", () => {
@@ -275,6 +360,7 @@ test("timeline cobre pending preparing shipped delivered sem marcar Correios fut
   const preparing = buildTrackingTimeline("preparing");
   assert.equal(preparing.find((s) => s.id === "preparation")?.label, "Preparando seu pedido");
   assert.equal(preparing.find((s) => s.id === "preparation")?.state, "current");
+  assert.equal(preparing.find((s) => s.id === "payment_confirmed")?.state, "done");
 
   const shipped = buildTrackingTimeline("shipped");
   assert.equal(shipped.find((s) => s.id === "posted")?.state, "current");
@@ -305,6 +391,8 @@ test("página e proxy configuram noindex e no-store", () => {
   const proxySource = readFileSync(path.join(root, "proxy.ts"), "utf8");
   assert.equal(pageSource.includes("index: false"), true);
   assert.equal(pageSource.includes('dynamic = "force-dynamic"'), true);
+  assert.equal(pageSource.includes("Pagamento confirmado"), false);
+  assert.equal(pageSource.includes("TrackingTimeline"), true);
   assert.equal(proxySource.includes("private, no-store"), true);
   assert.equal(proxySource.includes("noindex"), true);
   assert.equal(proxySource.includes("/pedido/acompanhar/"), true);

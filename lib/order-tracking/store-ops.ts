@@ -30,7 +30,18 @@ type OrderSnapshotDbRow = {
   shipping_city: string | null;
   shipping_state: string | null;
   tracking_code: string | null;
-  order_items: Array<{ sku: string; title: string; quantity: number }> | null;
+  order_items: Array<{
+    id: string;
+    sku: string;
+    title: string;
+    quantity: number;
+  }> | null;
+  digital_deliveries: Array<{
+    order_item_id: string;
+    email_status: string;
+    revoked_at: string | null;
+    created_at: string;
+  }> | null;
 };
 
 function createOpsSupabaseClient(env: NodeJS.Dict<string>): SupabaseClient {
@@ -115,7 +126,8 @@ export function createOpsOrderTrackingStore(
         shipping_city,
         shipping_state,
         tracking_code,
-        order_items ( sku, title, quantity )
+        order_items ( id, sku, title, quantity ),
+        digital_deliveries ( order_item_id, email_status, revoked_at, created_at )
       `,
         )
         .eq("id", orderId)
@@ -139,6 +151,12 @@ export function createOpsOrderTrackingStore(
         shippingState: row.shipping_state,
         trackingCode: row.tracking_code,
         items: row.order_items ?? [],
+        digitalDeliveries: (row.digital_deliveries ?? []).map((delivery) => ({
+          orderItemId: delivery.order_item_id,
+          emailStatus: delivery.email_status,
+          revokedAt: delivery.revoked_at,
+          createdAt: delivery.created_at,
+        })),
       };
     },
 

@@ -6,6 +6,13 @@ export type OrderTrackingAccessRow = {
   createdAt: string;
 };
 
+export type OrderTrackingDigitalDeliveryFact = {
+  orderItemId: string;
+  emailStatus: string;
+  revokedAt: string | null;
+  createdAt: string;
+};
+
 export type OrderTrackingOrderSnapshot = {
   orderId: string;
   publicId: string;
@@ -15,7 +22,8 @@ export type OrderTrackingOrderSnapshot = {
   shippingCity: string | null;
   shippingState: string | null;
   trackingCode: string | null;
-  items: Array<{ sku: string; title: string; quantity: number }>;
+  items: Array<{ id: string; sku: string; title: string; quantity: number }>;
+  digitalDeliveries: OrderTrackingDigitalDeliveryFact[];
 };
 
 export type OrderTrackingInsertResult =
@@ -40,12 +48,28 @@ export type OrderTrackingTimelineStep = {
   state: TimelineStepState;
 };
 
+/** Minimized buyer-facing digital delivery state — no tokens, paths, or provider IDs. */
+export type PublicDigitalDeliveryStatus =
+  | "delivered"
+  | "pending"
+  | "processing"
+  | "failed";
+
+export type OrderTrackingPublicItem = {
+  title: string;
+  quantity: number;
+  kind: "physical" | "digital";
+  format: string;
+  digitalDeliveryStatus?: PublicDigitalDeliveryStatus;
+};
+
 export type OrderTrackingPublicView = {
   friendlyCode: string;
   firstName: string | null;
+  statusMessage: string;
   city: string | null;
   region: string | null;
-  items: Array<{ title: string; quantity: number }>;
+  items: OrderTrackingPublicItem[];
   paymentConfirmed: true;
   fulfillmentStatus: string;
   trackingCode: string | null;

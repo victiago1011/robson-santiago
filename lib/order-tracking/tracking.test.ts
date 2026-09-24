@@ -5,13 +5,17 @@ import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { DIGITAL_SKU, PHYSICAL_SKU } from "@/lib/commerce/selection";
-import { createOrderTrackingAccess } from "@/lib/order-tracking/create";
+import {
+  createOrderTrackingAccess,
+  issueOrderTrackingAccess,
+} from "@/lib/order-tracking/create";
 import {
   ORDER_TRACKING_PATH_PREFIX,
   buildOrderTrackingUrl,
   normalizeTrackingToken,
 } from "@/lib/order-tracking/policy";
 import { resolveOrderTracking } from "@/lib/order-tracking/resolve";
+import { createOpsOrderTrackingStore } from "@/lib/order-tracking/store-ops";
 import {
   generateOrderTrackingToken,
   hashOrderTrackingToken,
@@ -152,6 +156,92 @@ test("digital-only não cria tracking", async () => {
     assert.equal(result.reason, "no_physical_item");
   }
   assert.equal(store.accessRows.length, 0);
+});
+
+test("pedido não aprovado não cria tracking", async () => {
+  const store = memoryTrackingStore({
+    order: snapshot({ paymentStatus: "pending" }),
+  });
+  const result = await issueOrderTrackingAccess(ORDER_ID, store);
+  assert.equal(result.status, "skipped");
+  if (result.status === "skipped") {
+    assert.equal(result.reason, "payment_not_approved");
+  }
+  assert.equal(store.accessRows.length, 0);
+});
+
+test("caminho CLI ops carrega em Node sem server-only e sem credenciais", async () => {
+  const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+  const storeOpsSource = readFileSync(path.join(root, "lib", "order-tracking", "store-ops.ts"), "utf8");
+  const scriptSource = readFileSync(
+    path.join(root, "scripts", "issue-order-tracking-link.ts"),
+    "utf8",
+  );
+
+  const importLines = (source: string) =>
+    source
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith("import "));
+
+  for (const line of [...importLines(storeOpsSource), ...importLines(scriptSource)]) {
+    assert.equal(line.includes("server-only"), false, line);
+    assert.equal(line.includes("@/lib/supabase/server"), false, line);
+    assert.equal(/@\/lib\/order-tracking\/store["']/.test(line), false, line);
+  }
+  assert.equal(
+    importLines(scriptSource).some((line) => line.includes("@/lib/order-tracking/store-ops")),
+    true,
+  );
+
+  // Importing the ops store must succeed in plain Node without secrets.
+  const store = createOpsOrderTrackingStore({
+    SUPABASE_URL: undefined,
+    SUPABASE_SECRET_KEY: undefined,
+  });
+  assert.equal(typeof store.insertAccess, "function");
+  assert.equal(typeof store.findOrderSnapshot, "function");
+
+  await assert.rejects(
+    () => store.findOrderSnapshot(ORDER_ID),
+    (err: unknown) => err instanceof Error && err.message === "SUPABASE_NOT_CONFIGURED",
+  );
+});
+
+test("issue via store ops path persiste só hash e rejeita digital/não aprovado", async () => {
+  const approvedPhysical = memoryTrackingStore();
+  const created = await issueOrderTrackingAccess(ORDER_ID, approvedPhysical);
+  assert.equal(created.status, "created");
+  if (created.status !== "created") {
+    return;
+  }
+  assert.equal(approvedPhysical.accessRows.length, 1);
+  assert.equal(approvedPhysical.accessRows[0]!.tokenHash, hashOrderTrackingToken(created.rawToken));
+  assert.equal(
+    approvedPhysical.accessRows.some((row) => row.tokenHash === created.rawToken),
+    false,
+  );
+  assert.equal(JSON.stringify(approvedPhysical.accessRows).includes(created.rawToken), false);
+
+  const notApproved = memoryTrackingStore({
+    order: snapshot({ paymentStatus: "rejected" }),
+  });
+  const skippedPayment = await issueOrderTrackingAccess(ORDER_ID, notApproved);
+  assert.equal(skippedPayment.status, "skipped");
+  if (skippedPayment.status === "skipped") {
+    assert.equal(skippedPayment.reason, "payment_not_approved");
+  }
+
+  const digitalOnly = memoryTrackingStore({
+    order: snapshot({
+      items: [{ sku: DIGITAL_SKU, title: "E-book", quantity: 1 }],
+    }),
+  });
+  const skippedDigital = await issueOrderTrackingAccess(ORDER_ID, digitalOnly);
+  assert.equal(skippedDigital.status, "skipped");
+  if (skippedDigital.status === "skipped") {
+    assert.equal(skippedDigital.reason, "no_physical_item");
+  }
 });
 
 test("DTO público não contém PII proibida", () => {

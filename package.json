@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --experimental-strip-types --import ./scripts/register-ts-test-loader.mjs --test lib/commerce/quote.test.ts lib/commerce/checkout-quote-state.test.ts lib/commerce/checkout-field-errors.test.ts lib/commerce/checkout-masks.test.ts lib/commerce/checkout-flow.test.ts lib/payments/checkout-payment.test.ts lib/payments/webhook-reconciliation.test.ts lib/payments/payment-brick-ui.test.ts lib/payments/brick-submit.test.ts lib/payments/public-payment-status.test.ts lib/payments/pix-status-polling.test.ts lib/digital-delivery/token.test.ts lib/digital-delivery/ensure.test.ts lib/digital-delivery/claim.test.ts lib/digital-delivery/download.test.ts lib/digital-delivery/ebook-email.test.ts lib/digital-delivery/fulfill-approved-order.test.ts lib/admin/access.test.ts lib/admin/session-token.test.ts lib/admin/orders.test.ts lib/admin/http.test.ts lib/admin/catalog.test.ts lib/admin/queries.test.ts lib/admin/fulfillment.test.ts lib/notifications/email.test.ts lib/notifications/notify.test.ts lib/order-tracking/tracking.test.ts"
+    "test": "node --experimental-strip-types --import ./scripts/register-ts-test-loader.mjs --test lib/commerce/quote.test.ts lib/commerce/checkout-quote-state.test.ts lib/commerce/checkout-field-errors.test.ts lib/commerce/checkout-masks.test.ts lib/commerce/checkout-flow.test.ts lib/payments/checkout-payment.test.ts lib/payments/webhook-reconciliation.test.ts lib/payments/payment-brick-ui.test.ts lib/payments/brick-submit.test.ts lib/payments/public-payment-status.test.ts lib/payments/pix-status-polling.test.ts lib/digital-delivery/token.test.ts lib/digital-delivery/ensure.test.ts lib/digital-delivery/claim.test.ts lib/digital-delivery/download.test.ts lib/digital-delivery/ebook-email.test.ts lib/digital-delivery/fulfill-approved-order.test.ts lib/admin/access.test.ts lib/admin/session-token.test.ts lib/admin/orders.test.ts lib/admin/http.test.ts lib/admin/catalog.test.ts lib/admin/queries.test.ts lib/admin/fulfillment.test.ts lib/notifications/email.test.ts lib/notifications/notify.test.ts lib/order-tracking/tracking.test.ts",
+    "issue-order-tracking-link": "tsx --env-file=.env.local scripts/issue-order-tracking-link.ts"
   },
   "dependencies": {
     "@mercadopago/sdk-react": "^1.0.7",
@@ -27,6 +28,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.1",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   }
 }

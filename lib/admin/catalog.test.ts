@@ -13,6 +13,7 @@ import {
   matchesComposition,
   matchesPaymentFilter,
   matchesShipmentFilter,
+  navCounts,
   pageSlice,
   type AdminOrderFact,
 } from "@/lib/admin/catalog";
@@ -31,6 +32,7 @@ function fact(
     fulfillmentStatus: "pending",
     paidAt: "2026-09-01T12:00:00.000Z",
     createdAt: "2026-09-01T11:00:00.000Z",
+    updatedAt: "2026-09-01T12:00:00.000Z",
     ...extras,
   };
 }
@@ -136,6 +138,81 @@ test("métricas usam só pedidos do status certo e somam quantidades", () => {
   assert.equal(metrics.approvedRevenueCents, 8480);
   assert.equal(metrics.pendingRevenueCents, 3990);
   assert.equal(metrics.declinedRevenueCents, 1500);
+});
+
+test("badges da sidebar: pending 24h por created_at, declined 48h por updated_at, aguardando envio sem limite", () => {
+  const now = new Date("2026-09-24T12:00:00.000Z");
+  const recentPending = fact("00000000-0000-4000-8000-000000000021", {
+    paymentStatus: "pending",
+    paidAt: null,
+    createdAt: "2026-09-24T01:00:00.000Z",
+    updatedAt: "2026-09-24T01:00:00.000Z",
+    items: [{ sku: PHYSICAL_SKU, quantity: 1 }],
+  });
+  const stalePending = fact("00000000-0000-4000-8000-000000000022", {
+    paymentStatus: "pending",
+    paidAt: null,
+    createdAt: "2026-09-22T11:00:00.000Z",
+    updatedAt: "2026-09-22T11:00:00.000Z",
+    items: [{ sku: PHYSICAL_SKU, quantity: 1 }],
+  });
+  const recentDeclinedByUpdate = fact("00000000-0000-4000-8000-000000000023", {
+    paymentStatus: "rejected",
+    paidAt: null,
+    createdAt: "2026-09-10T10:00:00.000Z",
+    updatedAt: "2026-09-23T12:00:00.000Z",
+    items: [{ sku: DIGITAL_SKU, quantity: 1 }],
+  });
+  const recentCancelled = fact("00000000-0000-4000-8000-000000000024", {
+    paymentStatus: "cancelled",
+    paidAt: null,
+    createdAt: "2026-09-23T10:00:00.000Z",
+    updatedAt: "2026-09-23T11:00:00.000Z",
+    items: [{ sku: PHYSICAL_SKU, quantity: 1 }],
+  });
+  const staleDeclined = fact("00000000-0000-4000-8000-000000000025", {
+    paymentStatus: "cancelled",
+    paidAt: null,
+    createdAt: "2026-09-10T10:00:00.000Z",
+    updatedAt: "2026-09-21T11:00:00.000Z",
+    items: [{ sku: PHYSICAL_SKU, quantity: 1 }],
+  });
+  const oldAwaitingShipment = fact("00000000-0000-4000-8000-000000000026", {
+    paymentStatus: "approved",
+    fulfillmentStatus: "preparing",
+    paidAt: "2026-08-01T10:00:00.000Z",
+    createdAt: "2026-08-01T09:00:00.000Z",
+    updatedAt: "2026-08-01T10:00:00.000Z",
+    items: [{ sku: PHYSICAL_SKU, quantity: 1 }],
+  });
+
+  const counts = navCounts(
+    [
+      recentPending,
+      stalePending,
+      recentDeclinedByUpdate,
+      recentCancelled,
+      staleDeclined,
+      oldAwaitingShipment,
+    ],
+    now,
+  );
+
+  assert.equal(counts.pendingPayments, 1);
+  assert.equal(counts.declinedPayments, 2);
+  assert.equal(counts.awaitingShipment, 1);
+
+  const metrics = deriveMetrics([
+    recentPending,
+    stalePending,
+    recentDeclinedByUpdate,
+    recentCancelled,
+    staleDeclined,
+    oldAwaitingShipment,
+  ]);
+  assert.equal(metrics.pendingPayments, 2);
+  assert.equal(metrics.declinedPayments, 3);
+  assert.equal(metrics.awaitingShipment, 1);
 });
 
 test("faturamento sem pedidos aprovados é zero e não trata total nulo como zero quando há pedido", () => {
@@ -415,4 +492,14 @@ test("rotas novas exigem a allowlist e a logística não duplica a consulta", ()
     assert.equal(source.includes("PhysicalOrdersView"), true, page);
     assert.equal(source.includes(".from("), false, page);
   }
+
+  const layout = readFileSync(join(process.cwd(), "app/admin/(protected)/layout.tsx"), "utf8");
+  assert.equal(layout.includes("navCounts(facts)"), true);
+  assert.equal(layout.includes("navCounts(deriveMetrics"), false);
+
+  const detail = readFileSync(join(process.cwd(), "components/admin/OrderDetail.tsx"), "utf8");
+  const pedido = detail.indexOf('title="Pedido"');
+  const logistica = detail.indexOf('title="Logística"');
+  const cliente = detail.indexOf('title="Cliente"');
+  assert.ok(pedido >= 0 && logistica > pedido && cliente > logistica);
 });

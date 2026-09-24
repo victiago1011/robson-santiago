@@ -15,6 +15,8 @@ test("consultas do admin não leem segredo de download e agregam os indicadores 
   assert.equal(facts.includes("customer_document"), false);
   assert.equal(facts.includes("customer_phone"), false);
   assert.equal(facts.includes("order_items"), true);
+  assert.equal(facts.includes("updated_at"), true);
+  assert.equal(facts.includes("created_at"), true);
 
   const loader = source.slice(
     source.indexOf("export const loadAdminOrderFacts"),

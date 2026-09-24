@@ -32,6 +32,7 @@ const FACT_SELECT = `
   fulfillment_status,
   paid_at,
   created_at,
+  updated_at,
   order_items (
     sku,
     quantity
@@ -131,6 +132,7 @@ const factSchema = z.object({
   fulfillment_status: z.string(),
   paid_at: z.string().nullable(),
   created_at: z.string(),
+  updated_at: z.string(),
   order_items: nested(
     z.object({
       sku: z.string(),
@@ -283,6 +285,7 @@ function toFact(row: z.infer<typeof factSchema>): AdminOrderFact {
     fulfillmentStatus: row.fulfillment_status,
     paidAt: row.paid_at,
     createdAt: row.created_at,
+    updatedAt: row.updated_at,
     items: row.order_items.map((item) => ({
       sku: item.sku,
       quantity: item.quantity,

@@ -10,6 +10,13 @@ import {
 
 export const ATTENTION_PREVIEW_LIMIT = 8;
 export const ADMIN_FACT_PAGE_SIZE = 1000;
+/** Sidebar badge only: pending payments created within this window. */
+export const PENDING_PAYMENT_BADGE_WINDOW_MS = 24 * 60 * 60 * 1000;
+/**
+ * Sidebar badge only: rejected/cancelled orders whose `updated_at` falls within this window.
+ * There is no rejected_at/cancelled_at; updated_at is the closest existing signal when payment_status changes.
+ */
+export const DECLINED_PAYMENT_BADGE_WINDOW_MS = 48 * 60 * 60 * 1000;
 
 export type ShipmentFilter = "all" | "awaiting" | "shipped" | "delivered";
 
@@ -38,6 +45,8 @@ export type AdminOrderFact = {
   fulfillmentStatus: string;
   paidAt: string | null;
   createdAt: string;
+  /** Last row touch; used as proxy for when payment became rejected/cancelled (no dedicated timestamp). */
+  updatedAt: string;
   items: AdminFactItem[];
 };
 
@@ -306,11 +315,48 @@ export function deriveMetrics(facts: AdminOrderFact[]): AdminMetrics {
   };
 }
 
-export function navCounts(metrics: AdminMetrics): NavCounts {
+function isWithinWindow(iso: string, nowMs: number, windowMs: number): boolean {
+  const timestamp = Date.parse(iso);
+  if (Number.isNaN(timestamp)) {
+    return false;
+  }
+  const age = nowMs - timestamp;
+  return age >= 0 && age <= windowMs;
+}
+
+/**
+ * Sidebar badges. Time windows apply only here — list pages keep full history.
+ * - pending: created_at within 24h
+ * - declined: updated_at within 48h (no rejected_at/cancelled_at on orders)
+ * - awaiting shipment: no time limit
+ */
+export function navCounts(facts: AdminOrderFact[], now: Date = new Date()): NavCounts {
+  const nowMs = now.getTime();
+  let awaitingShipment = 0;
+  let pendingPayments = 0;
+  let declinedPayments = 0;
+
+  for (const fact of facts) {
+    if (matchesShipmentFilter(fact, "awaiting")) {
+      awaitingShipment += 1;
+    }
+    if (
+      fact.paymentStatus === "pending" &&
+      isWithinWindow(fact.createdAt, nowMs, PENDING_PAYMENT_BADGE_WINDOW_MS)
+    ) {
+      pendingPayments += 1;
+    } else if (
+      (fact.paymentStatus === "rejected" || fact.paymentStatus === "cancelled") &&
+      isWithinWindow(fact.updatedAt, nowMs, DECLINED_PAYMENT_BADGE_WINDOW_MS)
+    ) {
+      declinedPayments += 1;
+    }
+  }
+
   return {
-    awaitingShipment: metrics.awaitingShipment,
-    pendingPayments: metrics.pendingPayments,
-    declinedPayments: metrics.declinedPayments,
+    awaitingShipment,
+    pendingPayments,
+    declinedPayments,
   };
 }
 

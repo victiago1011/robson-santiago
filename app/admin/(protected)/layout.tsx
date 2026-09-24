@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { AdminFrame, AdminMessage } from "@/components/admin/AdminChrome";
-import { deriveMetrics, navCounts, type NavCounts } from "@/lib/admin/catalog";
+import { navCounts, type NavCounts } from "@/lib/admin/catalog";
 import { resolveAdminAccess } from "@/lib/admin/guard";
 import { loadAdminOrderFacts } from "@/lib/admin/queries";
 
@@ -45,7 +45,7 @@ export default async function AdminProtectedLayout({ children }: { children: Rea
   let counts: NavCounts | null = null;
   const facts = await loadAdminOrderFacts();
   if (facts) {
-    counts = navCounts(deriveMetrics(facts));
+    counts = navCounts(facts);
   }
 
   return <AdminFrame counts={counts}>{children}</AdminFrame>;

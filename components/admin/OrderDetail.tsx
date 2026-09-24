@@ -75,6 +75,12 @@ export function OrderDetail({ order }: { order: OrderScreen }) {
           ) : null}
         </Block>
 
+        {order.logistics ? (
+          <Block title="Logística">
+            <LogisticsPanel orderId={order.id} logistics={order.logistics} />
+          </Block>
+        ) : null}
+
         <Block title="Cliente">
           <dl className="grid gap-5 sm:grid-cols-2">
             <Field label="Nome" value={displayText(order.buyerName)} />
@@ -189,12 +195,6 @@ export function OrderDetail({ order }: { order: OrderScreen }) {
             </ul>
           )}
         </Block>
-
-        {order.logistics ? (
-          <Block title="Logística">
-            <LogisticsPanel orderId={order.id} logistics={order.logistics} />
-          </Block>
-        ) : null}
 
         <Block title="Histórico">
           {order.events.length === 0 ? (

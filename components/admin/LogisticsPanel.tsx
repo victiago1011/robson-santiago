@@ -3,7 +3,6 @@
 import { useActionState } from "react";
 import {
   confirmOrderShipment,
-  resendAdminPhysicalSaleEmail,
   resendBuyerShippedEmail,
   startOrderPreparation,
 } from "@/lib/admin/fulfillment-actions";
@@ -102,23 +101,6 @@ function ConfirmShipmentForm({ orderId }: { orderId: string }) {
   );
 }
 
-function ResendAdminForm({ orderId }: { orderId: string }) {
-  const [state, action, pending] = useActionState(
-    resendAdminPhysicalSaleEmail,
-    INITIAL_FULFILLMENT_ACTION_STATE,
-  );
-
-  return (
-    <form action={action} className="mt-3">
-      <input type="hidden" name="orderId" value={orderId} />
-      <button type="submit" disabled={pending} className={secondaryButtonClassName}>
-        {pending ? "Reenviando…" : "Reenviar notificação"}
-      </button>
-      <ActionFeedback state={state} />
-    </form>
-  );
-}
-
 function ResendBuyerForm({ orderId }: { orderId: string }) {
   const [state, action, pending] = useActionState(
     resendBuyerShippedEmail,
@@ -202,18 +184,6 @@ export function LogisticsPanel({
 
       {status === "delivered" ? (
         <p className="mt-5 font-sans text-sm text-ink-soft">Entregue — somente leitura nesta fase.</p>
-      ) : null}
-
-      {logistics.adminSaleEmail && paymentApproved ? (
-        <div className="mt-5 border-t border-rule pt-5">
-          <Field label="Notificação ao Robinho" value={logistics.adminSaleEmail.statusLabel} />
-          {logistics.adminSaleEmail.sentAt ? (
-            <p className="mt-2 font-sans text-xs text-ink-soft">
-              Enviada em {formatAdminDateTime(logistics.adminSaleEmail.sentAt)}
-            </p>
-          ) : null}
-          {logistics.adminSaleEmail.canResend ? <ResendAdminForm orderId={orderId} /> : null}
-        </div>
       ) : null}
     </div>
   );

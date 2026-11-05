@@ -6,9 +6,9 @@ import {
   formatEditorialDate,
   parsePanoramaText,
   uniqueCategoryName,
-  useEditorialPreview,
+  usePanoramaContent,
   type EditorialPost,
-} from "@/lib/panorama/preview-store";
+} from "@/lib/panorama/editorial-client";
 
 type View = "visao" | "importar" | "publicacoes" | "categorias";
 type ImportDraft = EditorialPost & { selected: boolean };
@@ -103,7 +103,7 @@ function FormFields({
 }
 
 export default function PanoramaAdminPreview() {
-  const { data, save, loading, busy, error, reload, mode } = useEditorialPreview();
+  const { data, save, loading, busy, error, reload, mode } = usePanoramaContent();
   const [view, setView] = useState<View>("visao");
   const [rawText, setRawText] = useState("");
   const [importDate, setImportDate] = useState(todayInBrazil);

@@ -13,7 +13,7 @@ const overline = "text-[0.7rem] font-extrabold uppercase tracking-[0.15em]";
 const card = "rounded-2xl border border-[#dbe4ed] bg-white shadow-[0_12px_32px_rgba(11,36,60,0.035)]";
 
 export default function PanoramaPortal({ initialData }: { initialData?: EditorialState }) {
-  const { data, loading, error, reload, mode } = usePanoramaContent(initialData);
+  const { data, loading, error, reload } = usePanoramaContent(initialData);
   const [categoryId, setCategoryId] = useState("todas");
   const [search, setSearch] = useState("");
   const [day, setDay] = useState("");
@@ -212,7 +212,7 @@ export default function PanoramaPortal({ initialData }: { initialData?: Editoria
             )}
           </>
         )}
-        <p className="mt-12 text-center text-xs leading-relaxed text-[#8191a1]">{mode === "demo" ? "Pré-visualização de design." : "Panorama 360° — Robson Santiago."} Conteúdo informativo, com fontes identificadas em cada notícia.</p>
+        <p className="mt-12 text-center text-xs leading-relaxed text-[#8191a1]">Panorama 360° — Robson Santiago. Conteúdo informativo, com fontes identificadas em cada notícia.</p>
       </div>
       <footer className="border-t border-[#dfe7ed] bg-white px-5 py-8 text-center">
         <p className="font-black tracking-tight text-[#0a2d4a]">PANORAMA <span className="text-[#c0954a]">360°</span></p>

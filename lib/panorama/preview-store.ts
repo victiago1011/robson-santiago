@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { panoramaNews } from "@/lib/panorama/demo";
 
 export type EditorialCategory = { id: string; name: string };
@@ -57,30 +57,166 @@ function readPreview(): EditorialState {
   }
 }
 
+type RawPanorama = {
+  categories: EditorialCategory[];
+  posts: Array<{
+    id: string; title: string; category_id: string; summary: string; content: string;
+    impact: string; source: string; published_on: string; status: "draft" | "published";
+  }>;
+};
+
+function mapDbState(raw: RawPanorama): EditorialState {
+  return {
+    categories: raw.categories,
+    posts: raw.posts.map((post) => ({
+      id: post.id,
+      title: post.title,
+      categoryId: post.category_id,
+      summary: post.summary,
+      content: post.content,
+      impact: post.impact,
+      source: post.source,
+      publishedAt: post.published_on,
+      status: post.status === "published" ? "Publicado" : "Rascunho",
+    })),
+  };
+}
+
+function toDbPost(post: EditorialPost) {
+  return {
+    id: post.id,
+    category_id: post.categoryId,
+    title: post.title.trim(),
+    summary: post.summary,
+    content: post.content.trim(),
+    impact: post.impact,
+    source: post.source,
+    published_on: post.publishedAt,
+    status: post.status === "Publicado" ? "published" : "draft",
+  };
+}
+
 export function useEditorialPreview() {
-  const [data, setData] = useState<EditorialState>(initialEditorialState);
+  const [data, setData] = useState<EditorialState>({ categories: [], posts: [] });
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const saving = useRef(false);
+  const mode = typeof window === "undefined" ? "public"
+    : window.location.pathname.startsWith("/panorama-demo/") ? "demo"
+    : window.location.pathname.startsWith("/admin/") ? "admin"
+    : "public";
+
+  const reload = async () => {
+    if (mode === "demo") {
+      setData(readPreview());
+      setLoading(false);
+      setError(null);
+      return;
+    }
+    try {
+      const response = await fetch(mode === "admin" ? "/api/admin/panorama" : "/api/panorama", {
+        cache: "no-store", credentials: "same-origin",
+      });
+      if (!response.ok) throw new Error("Não foi possível carregar o Panorama 360°. Confira a conexão e o acesso administrativo.");
+      const json = await response.json() as RawPanorama;
+      setData(mapDbState(json));
+      setError(null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível carregar os conteúdos.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
+    void reload();
+    if (mode !== "demo") return;
     const sync = () => setData(readPreview());
-    sync();
     window.addEventListener("storage", sync);
     window.addEventListener("panorama-demo-update", sync);
     return () => {
       window.removeEventListener("storage", sync);
       window.removeEventListener("panorama-demo-update", sync);
     };
+  // Initial data request is made once on mount.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const save = (next: EditorialState) => {
-    setData(next);
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-      window.dispatchEvent(new Event("panorama-demo-update"));
-    } catch {
-      // Prototipagem sem persistência quando o navegador bloqueia armazenamento.
+  const sendCommand = async (payload: object) => {
+    const response = await fetch("/api/admin/panorama", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const result = await response.json().catch(() => ({})) as { error?: string };
+      throw new Error(result.error || "Não foi possível salvar a alteração.");
     }
   };
 
-  return { data, save };
+  const save = async (next: EditorialState) => {
+    if (mode === "demo") {
+      setData(next);
+      try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        window.dispatchEvent(new Event("panorama-demo-update"));
+      } catch {
+        // Local-only fallback if storage is blocked.
+      }
+      return;
+    }
+    if (mode !== "admin") throw new Error("Edição indisponível para visitantes.");
+    if (saving.current) throw new Error("Existe uma gravação em andamento.");
+    saving.current = true;
+    setBusy(true);
+    try {
+      const previous = data;
+      const oldCategories = new Map(previous.categories.map((category) => [category.id, category]));
+      const newCategories = new Map(next.categories.map((category) => [category.id, category]));
+      const oldPosts = new Map(previous.posts.map((post) => [post.id, post]));
+      const newPosts = new Map(next.posts.map((post) => [post.id, post]));
+
+      for (const category of next.categories) {
+        if (!oldCategories.has(category.id)) {
+          await sendCommand({ type: "category:create", category });
+        } else if (category.name !== oldCategories.get(category.id)?.name) {
+          await sendCommand({ type: "category:update", category });
+        }
+      }
+      for (const post of previous.posts) {
+        if (!newPosts.has(post.id)) await sendCommand({ type: "post:delete", id: post.id });
+      }
+
+      const inserts = next.posts.filter((post) => !oldPosts.has(post.id));
+      // Insert all the imported articles with one request. Supabase performs
+      // one SQL INSERT statement, so errors do not partially insert the batch.
+      for (let index = 0; index < inserts.length; index += 40) {
+        await sendCommand({ type: "posts:create", posts: inserts.slice(index, index + 40).map(toDbPost) });
+      }
+      for (const post of next.posts) {
+        const before = oldPosts.get(post.id);
+        if (before && JSON.stringify(before) !== JSON.stringify(post)) {
+          await sendCommand({ type: "post:upsert", post: toDbPost(post) });
+        }
+      }
+      for (const category of previous.categories) {
+        if (!newCategories.has(category.id)) {
+          await sendCommand({ type: "category:delete", id: category.id });
+        }
+      }
+      await reload();
+    } catch (cause) {
+      await reload();
+      throw cause;
+    } finally {
+      saving.current = false;
+      setBusy(false);
+    }
+  };
+
+  return { data, save, loading, busy, error, reload };
 }
 
 export function formatEditorialDate(date: string) {
@@ -144,7 +280,7 @@ export function parsePanoramaText(raw: string, date: string, categories: Editori
   flush();
 
   return parsed.map((item, index) => ({
-    id: "import-" + crypto.randomUUID(),
+    id: crypto.randomUUID(),
     title: item.title,
     categoryId: categories.find((c) => c.name === item.category)?.id || categories[0]?.id || "cat-0",
     summary: item.body[0]?.slice(0, 240) || "",

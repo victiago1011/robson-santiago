@@ -29,6 +29,7 @@ export default async function FinancasPage() {
         publishedAt: post.published_on,
         source: post.source,
         status: "Publicado" as const,
+        featured: post.featured,
       })),
     };
   } catch {

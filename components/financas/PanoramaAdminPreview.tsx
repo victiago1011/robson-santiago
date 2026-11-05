@@ -95,7 +95,7 @@ function FormFields({
       <label className="block text-sm font-semibold">Status
         <select className={field} value={value.status} onChange={(e) => update({ status: e.target.value as EditorialPost["status"] })}>
           <option value="Rascunho">Rascunho</option>
-          <option value="Publicado">Publicado (somente na prévia)</option>
+          <option value="Publicado">Publicado (visível no site)</option>
         </select>
       </label>
     </div>
@@ -103,7 +103,7 @@ function FormFields({
 }
 
 export default function PanoramaAdminPreview() {
-  const { data, save, loading, busy, error, reload, mode } = usePanoramaContent();
+  const { data, save, loading, busy, error, reload } = usePanoramaContent();
   const [view, setView] = useState<View>("visao");
   const [rawText, setRawText] = useState("");
   const [importDate, setImportDate] = useState(todayInBrazil);
@@ -247,9 +247,7 @@ export default function PanoramaAdminPreview() {
       </header>
 
       <div role="note" className="rounded-xl border border-[#ead09c] bg-[#fff9e9] px-4 py-3 text-sm leading-relaxed text-[#775829]">
-        {mode === "demo"
-          ? <><strong>Protótipo interativo:</strong> alterações armazenadas somente neste navegador, sem gravação no Supabase.</>
-          : <><strong>Gestão editorial real:</strong> alterações são gravadas no Supabase. Notícias publicadas aparecem no portal público. Revise os fatos e as fontes antes de publicar.</>}
+        <strong>Gestão editorial:</strong> alterações são gravadas no Supabase. Notícias publicadas aparecem no portal público. Revise os fatos e as fontes antes de publicar.
         {busy ? <p className="mt-2 font-semibold" role="status">Salvando alterações no servidor…</p> : null}
       </div>
 
@@ -271,10 +269,10 @@ export default function PanoramaAdminPreview() {
         <>
           <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Indicadores editoriais">
             {[
-              ["Notícias publicadas", published, mode === "demo" ? "Visíveis na prévia" : "Visíveis no portal"],
+              ["Notícias publicadas", published, "Visíveis no portal"],
               ["Rascunhos", draftCount, "Aguardando revisão"],
               ["Categorias", data.categories.length, "Criadas no painel"],
-              ["Total de publicações", data.posts.length, mode === "demo" ? "Conteúdo de demonstração" : "Cadastradas no Supabase"],
+              ["Total de publicações", data.posts.length, "Cadastradas no Supabase"],
             ].map(([label, value, subtitle], i) => (
               <div key={label} className={"rounded-2xl border p-5 " + (i === 0 ? "border-[#0a2945] bg-[#0a2945] text-white" : "border-[#e0e6ed] bg-white")}>
                 <p className={overline + (i === 0 ? " text-[#c4d6e5]" : " text-[#708296]")}>{label}</p>
@@ -304,7 +302,7 @@ export default function PanoramaAdminPreview() {
             <aside className={panel + " p-6"}>
               <p className={overline + " text-[#a17a3e]"}>Publicar sem complicação</p>
               <h2 className="mt-3 text-2xl font-extrabold leading-tight">Um Panorama inteiro, de uma só vez.</h2>
-              <p className="mt-3 text-sm leading-relaxed text-[#667d90]">Cole o texto da edição. A prévia identifica matérias numeradas e separa o bloco “Por que importa?”. Você revisa e escolhe o que publicar.</p>
+              <p className="mt-3 text-sm leading-relaxed text-[#667d90]">Cole o texto da edição. O importador identifica matérias numeradas e separa o bloco “Por que importa?”. Você revisa e escolhe o que publicar.</p>
               <button type="button" onClick={() => goTo("importar")} className={primary + " mt-6 w-full"}>Importar texto completo →</button>
               <button type="button" onClick={() => { goTo("publicacoes"); setEditing(newPost(data.categories[0]?.id || "")); }} className={secondary + " mt-3 w-full"}>Escrever notícia avulsa</button>
               <button type="button" onClick={() => goTo("categorias")} className="mt-5 w-full text-center text-sm font-bold text-[#1d628f] hover:underline">Gerenciar categorias →</button>
@@ -318,7 +316,7 @@ export default function PanoramaAdminPreview() {
           <section className={panel + " p-5 md:p-7"}>
             <p className={overline + " text-[#a47c39]"}>Publicação em lote</p>
             <h2 className="mt-2 text-2xl font-extrabold">Cole a edição completa do Panorama</h2>
-            <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[#667b8e]">Use o texto que o Robson já prepara. A demonstração reconhece matérias que começam por “1. Título”, “2. Título” e assim por diante, além de seções como Brasil, Mundo e “Por que importa?”. Não é necessário preencher um formulário por notícia.</p>
+            <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[#667b8e]">Use o texto que o Robson já prepara. O importador reconhece matérias que começam por “1. Título”, “2. Título” e assim por diante, além de seções como Brasil, Mundo e “Por que importa?”. Não é necessário preencher um formulário por notícia.</p>
             <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
               <label className="block text-sm font-semibold">Texto completo
                 <textarea value={rawText} onChange={(e) => { setRawText(e.target.value); setDrafts([]); }} rows={13} className={field + " font-mono text-xs leading-relaxed"} placeholder={"Cole aqui o PANORAMA 360° completo...\n\n🇧🇷 BRASIL — ECONOMIA E POLÍTICA\n1. Título da notícia\nTexto...\nPOR QUE IMPORTA?\nImpacto..."} />
@@ -365,7 +363,7 @@ export default function PanoramaAdminPreview() {
               </div>
               <div className="mt-6 flex flex-wrap gap-3 border-t border-[#e6edf2] pt-5">
                 <button type="button" onClick={() => commitImport("Rascunho")} disabled={!selectedCount || busy} className={secondary + " disabled:opacity-40"}>Salvar selecionadas como rascunho</button>
-                <button type="button" onClick={() => commitImport("Publicado")} disabled={!selectedCount || busy} className={primary + " disabled:opacity-40"}>Publicar selecionadas na prévia →</button>
+                <button type="button" onClick={() => commitImport("Publicado")} disabled={!selectedCount || busy} className={primary + " disabled:opacity-40"}>Publicar selecionadas →</button>
               </div>
               <p className="mt-4 text-xs leading-relaxed text-[#72869a]">A separação é automática, mas a conferência dos fatos, fontes e categorias deve ser feita pelo administrador. A publicação requer revisão manual de cada notícia e de suas fontes.</p>
             </section>
@@ -458,7 +456,7 @@ export default function PanoramaAdminPreview() {
       ) : null}
 
       <p className="border-t border-[#dce5ec] pt-5 text-xs leading-relaxed text-[#788a9c]">
-        A gestão editorial utiliza o Supabase no ADM autenticado. No endereço demonstrativo, as operações continuam locais. A parte comercial permanece independente.
+        A gestão editorial utiliza o Supabase e é restrita ao ADM autenticado. A parte comercial permanece independente.
       </p>
     </div>
   );

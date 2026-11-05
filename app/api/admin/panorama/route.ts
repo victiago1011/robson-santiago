@@ -20,6 +20,7 @@ const postSchema = z.object({
   source: z.string().max(1500),
   published_on: z.iso.date(),
   status: z.enum(["draft", "published"]),
+  featured: z.boolean(),
 }).strict();
 const requestSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("category:create"), category: categorySchema }).strict(),

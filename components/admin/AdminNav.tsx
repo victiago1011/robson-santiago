@@ -4,8 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { signOutAdmin } from "@/lib/admin/actions";
-import type { NavCounts } from "@/lib/admin/catalog";
-import { paymentListPath, physicalListPath } from "@/lib/admin/paths";
 
 type IconName =
   | "grid" | "orders" | "book" | "ebook" | "globe" | "truck"
@@ -44,7 +42,7 @@ type NavItem = {
   label: string;
   icon: IconName;
   exact?: boolean;
-  badge?: number;
+  activeUnder?: string[];
 };
 
 type NavSection = {
@@ -54,60 +52,39 @@ type NavSection = {
 };
 
 function isCurrent(pathname: string, item: NavItem) {
+  if (item.activeUnder?.some((prefix) => pathname === prefix || pathname.startsWith(prefix + "/"))) {
+    return true;
+  }
   return item.exact
     ? pathname === item.href
     : pathname === item.href || pathname.startsWith(item.href + "/");
 }
 
-function getSections(counts: NavCounts | null): NavSection[] {
+function getSections(): NavSection[] {
   return [
-    {
-      key: "principal",
-      label: "Principal",
-      items: [{ href: "/admin", label: "Visão geral", icon: "grid", exact: true }],
-    },
-    {
-      key: "pedidos",
-      label: "Pedidos",
-      items: [
-        { href: "/admin/pedidos", label: "Todos os pedidos", icon: "orders", exact: true },
-        { href: "/admin/pedidos/fisicos", label: "Livros físicos", icon: "book", exact: true },
-        { href: "/admin/pedidos/ebooks", label: "E-books", icon: "ebook", exact: true },
-      ],
-    },
-    {
-      key: "conteudo",
-      label: "Conteúdo",
-      items: [{ href: "/admin/panorama", label: "Panorama 360°", icon: "globe", exact: true }],
-    },
-    {
-      key: "logistica",
-      label: "Logística",
-      items: [
-        { href: physicalListPath("awaiting"), label: "Aguardando envio", icon: "clock", exact: true, badge: counts?.awaitingShipment },
-        { href: physicalListPath("shipped"), label: "Postados", icon: "truck", exact: true },
-        { href: physicalListPath("delivered"), label: "Entregues", icon: "check", exact: true },
-      ],
-    },
-    {
-      key: "pagamentos",
-      label: "Pagamentos",
-      items: [
-        { href: paymentListPath("pending"), label: "Aguardando pagamento", icon: "wallet", exact: true, badge: counts?.pendingPayments },
-        { href: paymentListPath("declined"), label: "Recusados / cancelados", icon: "cancel", exact: true, badge: counts?.declinedPayments },
-      ],
-    },
+    { key: "livro", label: "Livro", items: [
+      { href: "/admin", label: "Visão geral", icon: "grid", exact: true },
+      { href: "/admin/pedidos", label: "Pedidos", icon: "orders" },
+      { href: "/admin/pedidos/fisicos", label: "Logística", icon: "truck", activeUnder: ["/admin/logistica"] },
+      { href: "/admin/pagamentos", label: "Pagamentos", icon: "wallet" },
+    ]},
+    { key: "conteudos", label: "Conteúdos", items: [
+      { href: "/admin/panorama", label: "Panorama 360°", icon: "globe" },
+    ]},
   ];
 }
 
-function NavLinks({ counts, pathname, onNavigate }: {
-  counts: NavCounts | null;
+function NavLinks({ pathname, onNavigate }: {
   pathname: string;
   onNavigate: () => void;
 }) {
-  const sections = getSections(counts);
-  const activeSection = sections.find((group) => group.items.some((item) => isCurrent(pathname, item)))?.key;
-  const [expanded, setExpanded] = useState<string[]>(() => ["principal", "pedidos", "conteudo", activeSection].filter((key): key is string => Boolean(key)));
+  const sections = getSections();
+  const activeItem = sections
+    .flatMap((group) => group.items)
+    .filter((item) => isCurrent(pathname, item))
+    .sort((left, right) => right.href.length - left.href.length)[0];
+  const activeSection = sections.find((group) => group.items.some((item) => item.href === activeItem?.href))?.key;
+  const [expanded, setExpanded] = useState<string[]>(() => activeSection ? [activeSection] : ["livro"]);
 
   useEffect(() => {
     if (activeSection) {
@@ -134,7 +111,6 @@ function NavLinks({ counts, pathname, onNavigate }: {
       <nav aria-label="Menu administrativo" className="admin-nav-scroll min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-3 py-5">
         {sections.map((section) => {
           const isExpanded = expanded.includes(section.key);
-          const count = section.items.reduce((total, item) => total + (item.badge && item.badge > 0 ? item.badge : 0), 0);
           const sectionActive = section.key === activeSection;
           return (
             <section key={section.key} aria-label={section.label}>
@@ -149,7 +125,6 @@ function NavLinks({ counts, pathname, onNavigate }: {
                 >
                   <span>{section.label}</span>
                   <span className="flex items-center gap-2">
-                    {!isExpanded && count > 0 ? <span className="rounded-full bg-[#233d55] px-2 py-0.5 text-[0.65rem] tracking-normal text-[#e7eff6]">{count}</span> : null}
                     <Icon name="chevron" className={"h-3.5 w-3.5 transition-transform duration-200 " + (isExpanded ? "rotate-180" : "")} />
                   </span>
                 </button>
@@ -157,7 +132,7 @@ function NavLinks({ counts, pathname, onNavigate }: {
               {isExpanded ? (
                 <ul id={"admin-nav-" + section.key} className="mt-1 space-y-1 pb-2">
                   {section.items.map((item) => {
-                    const active = isCurrent(pathname, item);
+                    const active = activeItem?.href === item.href;
                     return (
                       <li key={item.href}>
                         <Link
@@ -170,12 +145,7 @@ function NavLinks({ counts, pathname, onNavigate }: {
                           {active ? <span aria-hidden="true" className="absolute bottom-2 left-0 top-2 w-[3px] rounded-r-full bg-[#e1bc79]" /> : null}
                           <Icon name={item.icon} className={"h-[18px] w-[18px] shrink-0 " + (active ? "text-[#e7c487]" : "text-[#8299ab] group-hover:text-[#d4c3a6]")} />
                           <span className="min-w-0 flex-1">{item.label}</span>
-                          {item.badge !== undefined ? (
-                            <span className={"flex min-h-5 min-w-6 shrink-0 items-center justify-center rounded-md px-1.5 text-[0.68rem] font-bold tabular-nums " +
-                              (active ? "bg-[#d7ba84] text-[#152b41]" : item.badge > 0 ? "bg-[#2c4f69] text-[#e7f1fa]" : "bg-white/[0.08] text-[#a5b7c5]")}>
-                              {item.badge}
-                            </span>
-                          ) : null}
+
                         </Link>
                       </li>
                     );
@@ -199,7 +169,7 @@ function NavLinks({ counts, pathname, onNavigate }: {
   );
 }
 
-export function AdminNav({ counts }: { counts: NavCounts | null }) {
+export function AdminNav() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
@@ -284,7 +254,7 @@ export function AdminNav({ counts }: { counts: NavCounts | null }) {
             <Icon name="close" className="h-5 w-5" />
           </button>
         </div>
-        <NavLinks counts={counts} pathname={pathname} onNavigate={() => setOpen(false)} />
+        <NavLinks pathname={pathname} onNavigate={() => setOpen(false)} />
       </aside>
     </>
   );

@@ -8,6 +8,7 @@ import {
   uniqueCategoryName,
   usePanoramaContent,
   type EditorialPost,
+  type EditorialState,
 } from "@/lib/panorama/editorial-client";
 
 type View = "visao" | "importar" | "publicacoes" | "categorias";
@@ -53,6 +54,7 @@ function newPost(categoryId: string): EditorialPost {
     impact: "",
     publishedAt: todayInBrazil(),
     status: "Rascunho",
+    featured: false,
     source: "Texto próprio de Robson Santiago",
   };
 }
@@ -92,6 +94,16 @@ function FormFields({
       <label className="block text-sm font-semibold">Fonte ou referência
         <input className={field} value={value.source} onChange={(e) => update({ source: e.target.value })} placeholder="Link ou identificação da fonte" />
       </label>
+      <label className="flex items-start gap-3 rounded-xl border border-[#d9e5ed] bg-[#f1f7fa] p-4 text-sm">
+        <input type="checkbox" className="mt-1 h-4 w-4 shrink-0 accent-[#0b2a45]" checked={value.featured}
+          onChange={(e) => update({ featured: e.target.checked })} />
+        <span><strong>Destacar no resumo de 60 segundos</strong>
+          <span className="mt-1 block text-xs leading-relaxed text-[#647c8f]">
+            Opcional. As matérias destacadas têm prioridade entre os cinco assuntos mais recentes da data.
+            Caso nenhuma seja destacada, o portal usa as notícias mais recentes automaticamente.
+          </span>
+        </span>
+      </label>
       <label className="block text-sm font-semibold">Status
         <select className={field} value={value.status} onChange={(e) => update({ status: e.target.value as EditorialPost["status"] })}>
           <option value="Rascunho">Rascunho</option>
@@ -102,8 +114,8 @@ function FormFields({
   );
 }
 
-export default function PanoramaAdminPreview() {
-  const { data, save, loading, busy, error, reload } = usePanoramaContent();
+export default function PanoramaAdminPreview({ initialData }: { initialData?: EditorialState }) {
+  const { data, save, loading, busy, error, reload } = usePanoramaContent(initialData);
   const [view, setView] = useState<View>("visao");
   const [rawText, setRawText] = useState("");
   const [importDate, setImportDate] = useState(todayInBrazil);

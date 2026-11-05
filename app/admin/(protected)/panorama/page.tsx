@@ -1,5 +1,46 @@
+import { Suspense } from "react";
 import PanoramaAdminPreview from "@/components/financas/PanoramaAdminPreview";
+import { requireAdminPage } from "@/lib/admin/guard";
+import { readPanoramaData } from "@/lib/panorama/store";
+import type { EditorialState } from "@/lib/panorama/editorial-client";
+
+export const dynamic = "force-dynamic";
+
+async function PanoramaPanelContent() {
+  if (!(await requireAdminPage())) return null;
+
+  let initialData: EditorialState | undefined;
+  try {
+    const rows = await readPanoramaData(true);
+    initialData = {
+      categories: rows.categories,
+      posts: rows.posts.map((post) => ({
+        id: post.id,
+        title: post.title,
+        categoryId: post.category_id,
+        summary: post.summary,
+        content: post.content,
+        impact: post.impact,
+        source: post.source,
+        publishedAt: post.published_on,
+        status: (post.status === "published" ? "Publicado" : "Rascunho") as "Publicado" | "Rascunho",
+        featured: post.featured,
+      })),
+    };
+  } catch {
+    // The editor falls back to its authenticated API with a retry control.
+  }
+  return <PanoramaAdminPreview initialData={initialData} />;
+}
 
 export default function AdminPanoramaPage() {
-  return <PanoramaAdminPreview />;
+  return (
+    <Suspense fallback={
+      <div role="status" className="rounded-2xl border border-[#dfe6eb] bg-white p-8 text-sm text-[#567186]">
+        Preparando as notícias e categorias…
+      </div>
+    }>
+      <PanoramaPanelContent />
+    </Suspense>
+  );
 }

@@ -8,6 +8,7 @@ import {
   type EditorialPost,
   type EditorialState,
 } from "@/lib/panorama/editorial-client";
+import { selectMinuteBriefing } from "@/lib/panorama/briefing";
 
 const overline = "text-[0.7rem] font-extrabold uppercase tracking-[0.15em]";
 const card = "rounded-2xl border border-[#dbe4ed] bg-white shadow-[0_12px_32px_rgba(11,36,60,0.035)]";
@@ -48,6 +49,8 @@ export default function PanoramaPortal({ initialData }: { initialData?: Editoria
       })
       .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt) || a.title.localeCompare(b.title, "pt-BR"));
   }, [available, categoryId, day, search]);
+
+  const briefing = useMemo(() => selectMinuteBriefing(available), [available]);
 
   const selected = available.find((post) => post.id === activeId) || null;
 
@@ -148,6 +151,37 @@ export default function PanoramaPortal({ initialData }: { initialData?: Editoria
           </div>
         ) : (
           <>
+            {briefing ? (
+              <section aria-labelledby="minute-briefing-title" className="mb-10 overflow-hidden rounded-2xl border border-[#294d6c] bg-[#0a2b49] text-white shadow-[0_20px_50px_rgba(9,42,70,0.12)]">
+                <div className="grid lg:grid-cols-[0.84fr_1.16fr]">
+                  <div className="border-b border-white/10 p-6 sm:p-8 lg:border-b-0 lg:border-r lg:p-9">
+                    <p className={overline + " text-[#deb875]"}>Panorama rápido • {formatEditorialDate(briefing.date)}</p>
+                    <h2 id="minute-briefing-title" className="mt-4 text-[1.8rem] font-extrabold leading-tight tracking-tight sm:text-3xl">
+                      Tudo que você precisa saber em <span className="text-[#edc77d]">60 segundos</span>
+                    </h2>
+                    <p className="mt-4 max-w-sm text-sm leading-relaxed text-[#b9cedf]">
+                      Os principais assuntos da publicação mais recente. Escolha um destaque para ler a notícia completa.
+                    </p>
+                  </div>
+                  <ol className="divide-y divide-white/[0.12] px-5 py-3 sm:px-8 lg:py-5">
+                    {briefing.items.map((post, index) => (
+                      <li key={post.id}>
+                        <button type="button" onClick={() => openPost(post)} className="group flex min-h-[66px] w-full items-center gap-4 py-3 text-left focus-visible:rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#eac77d]">
+                          <span className="w-9 shrink-0 text-xl font-black text-[#e7bd74]">{String(index + 1).padStart(2, "0")}</span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-semibold leading-snug text-white group-hover:underline sm:text-[0.96rem]">{post.title}</span>
+                            <span className="mt-1 block text-[0.7rem] font-medium tracking-wide text-[#adc2d5]">
+                              {data.categories.find((category) => category.id === post.categoryId)?.name || "Notícia"}
+                            </span>
+                          </span>
+                          <span aria-hidden="true" className="text-xl text-[#eac77d] transition-transform group-hover:translate-x-1">↗</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              </section>
+            ) : null}
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
                 <p className={overline + " text-[#b38b45]"}>Atualizações e análises</p>

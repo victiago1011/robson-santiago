@@ -64,7 +64,7 @@ function getSections(): NavSection[] {
   return [
     { key: "livro", label: "Livro", items: [
       { href: "/admin", label: "Visão geral", icon: "grid", exact: true },
-      { href: "/admin/pedidos", label: "Pedidos", icon: "orders", exact: true },
+      { href: "/admin/pedidos", label: "Pedidos", icon: "orders" },
       { href: "/admin/pedidos/fisicos", label: "Logística", icon: "truck", activeUnder: ["/admin/logistica"] },
       { href: "/admin/pagamentos", label: "Pagamentos", icon: "wallet" },
     ]},
@@ -79,7 +79,11 @@ function NavLinks({ pathname, onNavigate }: {
   onNavigate: () => void;
 }) {
   const sections = getSections();
-  const activeSection = sections.find((group) => group.items.some((item) => isCurrent(pathname, item)))?.key;
+  const activeItem = sections
+    .flatMap((group) => group.items)
+    .filter((item) => isCurrent(pathname, item))
+    .sort((left, right) => right.href.length - left.href.length)[0];
+  const activeSection = sections.find((group) => group.items.some((item) => item.href === activeItem?.href))?.key;
   const [expanded, setExpanded] = useState<string[]>(() => activeSection ? [activeSection] : ["livro"]);
 
   useEffect(() => {
@@ -128,7 +132,7 @@ function NavLinks({ pathname, onNavigate }: {
               {isExpanded ? (
                 <ul id={"admin-nav-" + section.key} className="mt-1 space-y-1 pb-2">
                   {section.items.map((item) => {
-                    const active = isCurrent(pathname, item);
+                    const active = activeItem?.href === item.href;
                     return (
                       <li key={item.href}>
                         <Link

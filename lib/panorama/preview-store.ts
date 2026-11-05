@@ -216,7 +216,7 @@ export function useEditorialPreview() {
     }
   };
 
-  return { data, save, loading, busy, error, reload };
+  return { data, save, loading, busy, error, reload, mode };
 }
 
 export function formatEditorialDate(date: string) {

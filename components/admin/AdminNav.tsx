@@ -42,6 +42,7 @@ type NavItem = {
   label: string;
   icon: IconName;
   exact?: boolean;
+  activeUnder?: string[];
 };
 
 type NavSection = {
@@ -51,6 +52,9 @@ type NavSection = {
 };
 
 function isCurrent(pathname: string, item: NavItem) {
+  if (item.activeUnder?.some((prefix) => pathname === prefix || pathname.startsWith(prefix + "/"))) {
+    return true;
+  }
   return item.exact
     ? pathname === item.href
     : pathname === item.href || pathname.startsWith(item.href + "/");
@@ -60,8 +64,8 @@ function getSections(): NavSection[] {
   return [
     { key: "livro", label: "Livro", items: [
       { href: "/admin", label: "Visão geral", icon: "grid", exact: true },
-      { href: "/admin/pedidos", label: "Pedidos", icon: "orders" },
-      { href: "/admin/pedidos/fisicos", label: "Logística", icon: "truck", exact: true },
+      { href: "/admin/pedidos", label: "Pedidos", icon: "orders", exact: true },
+      { href: "/admin/pedidos/fisicos", label: "Logística", icon: "truck", activeUnder: ["/admin/logistica"] },
       { href: "/admin/pagamentos", label: "Pagamentos", icon: "wallet" },
     ]},
     { key: "conteudos", label: "Conteúdos", items: [

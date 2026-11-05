@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   formatEditorialDate,
@@ -9,50 +9,44 @@ import {
   type EditorialState,
 } from "@/lib/panorama/editorial-client";
 import { selectMinuteBriefing } from "@/lib/panorama/briefing";
+import {
+  groupNewsByTopic,
+  longEditionDate,
+  publishedDays,
+  shortEditionDate,
+  topicSymbol,
+} from "@/lib/panorama/daily-editions";
 
-const overline = "text-[0.7rem] font-extrabold uppercase tracking-[0.15em]";
-const card = "rounded-2xl border border-[#dbe4ed] bg-white shadow-[0_12px_32px_rgba(11,36,60,0.035)]";
+const overline = "text-[0.69rem] font-extrabold uppercase tracking-[0.15em]";
+const surface = "rounded-2xl border border-[#dce5ed] bg-white shadow-[0_12px_36px_rgba(11,36,60,0.035)]";
 
 export default function PanoramaPortal({ initialData }: { initialData?: EditorialState }) {
   const { data, loading, error, reload } = usePanoramaContent(initialData);
-  const [categoryId, setCategoryId] = useState("todas");
-  const [search, setSearch] = useState("");
-  const [day, setDay] = useState("");
-  const [limit, setLimit] = useState(9);
+  const [chosenDay, setChosenDay] = useState<string | null>(null);
+  const [chosenTopic, setChosenTopic] = useState<string | null>(null);
+  const [expandedPosts, setExpandedPosts] = useState<string[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [shareMessage, setShareMessage] = useState("");
+  const readingRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const sync = () => {
-      const params = new URLSearchParams(window.location.search);
-      setActiveId(params.get("noticia"));
-    };
+    const sync = () => setActiveId(new URLSearchParams(window.location.search).get("noticia"));
     sync();
     window.addEventListener("popstate", sync);
     return () => window.removeEventListener("popstate", sync);
   }, []);
 
-  const available = useMemo(
-    () => data.posts.filter((post) => post.status === "Publicado"),
-    [data.posts],
+  const days = useMemo(() => publishedDays(data.posts), [data.posts]);
+  const day = chosenDay && days.includes(chosenDay) ? chosenDay : days[0] ?? "";
+  const topics = useMemo(
+    () => groupNewsByTopic(data.posts, day, data.categories),
+    [data.posts, data.categories, day],
   );
-
-  const articles = useMemo(() => {
-    const query = search.trim().toLocaleLowerCase("pt-BR");
-    return available
-      .filter((post) => {
-        const categoryMatches = categoryId === "todas" || post.categoryId === categoryId;
-        const dateMatches = !day || post.publishedAt === day;
-        const queryMatches = !query || [post.title, post.summary, post.content, post.impact]
-          .some((part) => part.toLocaleLowerCase("pt-BR").includes(query));
-        return categoryMatches && dateMatches && queryMatches;
-      })
-      .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt) || a.title.localeCompare(b.title, "pt-BR"));
-  }, [available, categoryId, day, search]);
-
-  const briefing = useMemo(() => selectMinuteBriefing(available), [available]);
-
-  const selected = available.find((post) => post.id === activeId) || null;
+  const dailyPosts = useMemo(() => topics.flatMap((topic) => topic.posts), [topics]);
+  const dailyBriefing = useMemo(() => selectMinuteBriefing(dailyPosts), [dailyPosts]);
+  const selected = data.posts.find((post) => post.status === "Publicado" && post.id === activeId) || null;
+  const total = dailyPosts.length;
+  const visibleTopics = chosenTopic === "all" ? topics : topics.filter((topic) => topic.id === chosenTopic);
 
   const openPost = (post: EditorialPost) => {
     window.history.pushState(null, "", "/financas?noticia=" + encodeURIComponent(post.id));
@@ -62,8 +56,10 @@ export default function PanoramaPortal({ initialData }: { initialData?: Editoria
   };
 
   const closePost = () => {
+    if (selected) setChosenDay(selected.publishedAt);
     window.history.pushState(null, "", "/financas");
     setActiveId(null);
+    setShareMessage("");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -73,7 +69,7 @@ export default function PanoramaPortal({ initialData }: { initialData?: Editoria
       try {
         await navigator.share({ title: selected?.title || "Panorama 360°", url });
       } catch {
-        // O usuário pode cancelar o diálogo de compartilhamento.
+        // O compartilhamento pode ser cancelado pelo visitante.
       }
     } else if (navigator.clipboard) {
       try {
@@ -85,11 +81,27 @@ export default function PanoramaPortal({ initialData }: { initialData?: Editoria
     }
   };
 
-  const clearFilters = () => {
-    setCategoryId("todas");
-    setSearch("");
-    setDay("");
-    setLimit(9);
+  const changeDay = (date: string) => {
+    setChosenDay(date);
+    setChosenTopic(null);
+    setExpandedPosts([]);
+  };
+
+  const chooseTopic = (id: string) => {
+    setChosenTopic(id);
+    setExpandedPosts([]);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => readingRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      }));
+    });
+  };
+
+  const togglePost = (id: string) => {
+    setExpandedPosts((current) => current.includes(id)
+      ? current.filter((item) => item !== id)
+      : [...current, id]);
   };
 
   return (
@@ -113,21 +125,25 @@ export default function PanoramaPortal({ initialData }: { initialData?: Editoria
 
       <div className="mx-auto max-w-[1230px] px-5 pb-16 pt-9 md:px-8 md:pt-12">
         {loading ? (
-          <section role="status" className={card + " p-10 text-center text-[#58748b]"}>Carregando notícias do Panorama 360°…</section>
+          <section role="status" className={surface + " p-10 text-center text-[#58748b]"}>
+            Carregando o Panorama 360°…
+          </section>
         ) : error ? (
-          <section role="alert" className={card + " p-10 text-center"}>
-            <h2 className="text-xl font-bold">Não foi possível carregar as notícias</h2>
+          <section role="alert" className={surface + " p-10 text-center"}>
+            <h2 className="text-xl font-bold">Não foi possível carregar o Panorama</h2>
             <p className="mt-3 text-sm text-[#6d8296]">{error}</p>
             <button type="button" onClick={() => void reload()} className="mt-5 rounded-lg bg-[#0b2a45] px-5 py-3 text-sm font-bold text-white">Tentar novamente</button>
           </section>
         ) : selected ? (
-          <div className="mx-auto max-w-[950px]">
-            <button type="button" onClick={closePost} className="mb-6 inline-flex min-h-11 items-center gap-2 text-sm font-bold text-[#1b5c8a] hover:underline">← Todas as notícias</button>
-            <article className={card + " overflow-hidden"}>
+          <div className="mx-auto max-w-[940px]">
+            <button type="button" onClick={closePost} className="mb-6 inline-flex min-h-11 items-center gap-2 text-sm font-bold text-[#1b5c8a] hover:underline">← Voltar à edição do dia</button>
+            <article className={surface + " overflow-hidden"}>
               <div className="border-b border-[#e4eaf0] px-6 py-8 sm:px-10 md:px-14 md:py-12">
                 <p className={overline + " text-[#ab8139]"}>
-                  {data.categories.find((cat) => cat.id === selected.categoryId)?.name || "Notícia"}
-                  <span className="mx-2 text-[#a9b6c2]">•</span>{formatEditorialDate(selected.publishedAt)}
+                  {topicSymbol(data.categories.find((category) => category.id === selected.categoryId)?.name || "")}
+                  {" "}{data.categories.find((category) => category.id === selected.categoryId)?.name || "Notícia"}
+                  <span className="mx-2 text-[#a9b6c2]">•</span>
+                  <time dateTime={selected.publishedAt}>{formatEditorialDate(selected.publishedAt)}</time>
                 </p>
                 <h2 className="mt-5 text-3xl font-extrabold leading-tight tracking-tight md:text-5xl">{selected.title}</h2>
                 <p className="mt-5 max-w-[720px] text-base leading-relaxed text-[#62798b] md:text-lg">{selected.summary}</p>
@@ -149,24 +165,71 @@ export default function PanoramaPortal({ initialData }: { initialData?: Editoria
               </div>
             </article>
           </div>
-        ) : (
+        ) : days.length ? (
           <>
-            {briefing ? (
-              <section aria-labelledby="minute-briefing-title" className="mb-10 overflow-hidden rounded-2xl border border-[#294d6c] bg-[#0a2b49] text-white shadow-[0_20px_50px_rgba(9,42,70,0.12)]">
-                <div className="grid lg:grid-cols-[0.84fr_1.16fr]">
+            <section aria-label="Edições por data" className={surface + " overflow-hidden p-5 md:p-7"}>
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <p className={overline + " text-[#a78245]"}>Panorama diário</p>
+                  <h2 className="mt-2 text-2xl font-extrabold tracking-tight md:text-3xl">Escolha o dia</h2>
+                  <p className="mt-1 text-sm text-[#667f93]">Uma edição por data. Todas as notícias daquele dia reunidas por assunto.</p>
+                </div>
+                <span className="rounded-full bg-[#ecf2f7] px-3 py-1.5 text-xs font-semibold text-[#507086]">
+                  {days.length} {days.length === 1 ? "dia publicado" : "dias publicados"}
+                </span>
+              </div>
+              <div aria-label="Dias com notícias publicadas" className="-mx-1 mt-6 flex snap-x gap-2 overflow-x-auto px-1 pb-2">
+                {days.map((date, index) => {
+                  const formatted = shortEditionDate(date);
+                  const active = day === date;
+                  return (
+                    <button key={date} type="button" aria-pressed={active} onClick={() => changeDay(date)}
+                      className={"flex min-h-[90px] min-w-[106px] snap-start flex-col items-center justify-center rounded-xl border px-4 py-2 text-center transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#bf974f] " +
+                        (active ? "border-[#0a2b49] bg-[#0a2b49] text-white shadow-md" : "border-[#dce4eb] bg-[#f8fafc] text-[#3a5a74] hover:border-[#9eafbf]")}>
+                      <span className={"text-[0.65rem] font-extrabold uppercase tracking-[0.1em] " + (active ? "text-[#eac783]" : "text-[#7890a5]")}>
+                        {index === 0 ? "Mais recente" : formatted.weekday}
+                      </span>
+                      <span className="mt-1 text-2xl font-extrabold leading-none">{formatted.day}</span>
+                      <span className="mt-1 text-xs font-semibold uppercase">{formatted.month}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section aria-labelledby="daily-edition-title" className="mt-9">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <p className={overline + " text-[#b38b45]"}>Edição do dia</p>
+                  <h2 id="daily-edition-title" className="mt-2 text-[1.7rem] font-extrabold capitalize leading-tight tracking-tight md:text-4xl">
+                    {longEditionDate(day)}
+                  </h2>
+                  <p className="mt-2 text-sm text-[#6a8093]">{total} {total === 1 ? "notícia" : "notícias"} • {topics.length} {topics.length === 1 ? "assunto" : "assuntos"}</p>
+                </div>
+                <button type="button" onClick={() => chooseTopic("all")}
+                  className="inline-flex min-h-11 items-center rounded-xl border border-[#b4cad9] bg-white px-5 text-sm font-bold text-[#1a527b] transition hover:bg-[#e9f1f8]">
+                  Ler a edição completa ↓
+                </button>
+              </div>
+            </section>
+
+            {dailyBriefing ? (
+              <section aria-labelledby="minute-briefing-title" className="mt-7 overflow-hidden rounded-2xl border border-[#294d6c] bg-[#0a2b49] text-white shadow-[0_20px_50px_rgba(9,42,70,0.12)]">
+                <div className="grid lg:grid-cols-[0.8fr_1.2fr]">
                   <div className="border-b border-white/10 p-6 sm:p-8 lg:border-b-0 lg:border-r lg:p-9">
-                    <p className={overline + " text-[#deb875]"}>Panorama rápido • {formatEditorialDate(briefing.date)}</p>
-                    <h2 id="minute-briefing-title" className="mt-4 text-[1.8rem] font-extrabold leading-tight tracking-tight sm:text-3xl">
+                    <p className={overline + " text-[#deb875]"}>Panorama em 60 segundos</p>
+                    <h3 id="minute-briefing-title" className="mt-4 text-[1.8rem] font-extrabold leading-tight tracking-tight sm:text-3xl">
                       Tudo que você precisa saber em <span className="text-[#edc77d]">60 segundos</span>
-                    </h2>
+                    </h3>
                     <p className="mt-4 max-w-sm text-sm leading-relaxed text-[#b9cedf]">
-                      Os principais assuntos da publicação mais recente. Escolha um destaque para ler a notícia completa.
+                      Uma visão rápida desta edição. Clique em qualquer manchete para ler os detalhes.
                     </p>
                   </div>
                   <ol className="divide-y divide-white/[0.12] px-5 py-3 sm:px-8 lg:py-5">
-                    {briefing.items.map((post, index) => (
+                    {dailyBriefing.items.map((post, index) => (
                       <li key={post.id}>
-                        <button type="button" onClick={() => openPost(post)} className="group flex min-h-[66px] w-full items-center gap-4 py-3 text-left focus-visible:rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#eac77d]">
+                        <button type="button" onClick={() => openPost(post)}
+                          className="group flex min-h-[64px] w-full items-center gap-4 py-3 text-left focus-visible:rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#eac77d]">
                           <span className="w-9 shrink-0 text-xl font-black text-[#e7bd74]">{String(index + 1).padStart(2, "0")}</span>
                           <span className="min-w-0 flex-1">
                             <span className="block text-sm font-semibold leading-snug text-white group-hover:underline sm:text-[0.96rem]">{post.title}</span>
@@ -181,79 +244,148 @@ export default function PanoramaPortal({ initialData }: { initialData?: Editoria
                   </ol>
                 </div>
               </section>
-            ) : (
-              <section aria-label="Tudo que você precisa saber em 60 segundos" className="mb-10 rounded-2xl border border-[#dce5ec] bg-white px-6 py-7 sm:px-8">
-                <p className={overline + " text-[#a68145]"}>Panorama rápido</p>
-                <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-[#12324e]">Tudo que você precisa saber em 60 segundos</h2>
-                <p className="mt-3 max-w-2xl text-sm text-[#667b8d]">Os cinco principais assuntos aparecerão aqui assim que as primeiras notícias forem publicadas.</p>
-              </section>
-            )}
-            <div className="flex flex-wrap items-end justify-between gap-4">
-              <div>
-                <p className={overline + " text-[#b38b45]"}>Atualizações e análises</p>
-                <h2 className="mt-2 text-3xl font-extrabold tracking-tight md:text-[2.5rem]">Últimas notícias</h2>
-                <p className="mt-2 text-sm text-[#6a8093]">Escolha os assuntos ou uma data para ler o que mais interessa.</p>
+            ) : null}
+
+            <section aria-labelledby="topics-title" className="mt-11">
+              <div className="mb-5">
+                <p className={overline + " text-[#b38b45]"}>Notícias organizadas por assunto</p>
+                <h2 id="topics-title" className="mt-2 text-2xl font-extrabold tracking-tight md:text-3xl">O que você quer acompanhar?</h2>
+                <p className="mt-2 text-sm leading-relaxed text-[#6d8093]">
+                  Escolha Brasil, Mundo ou outro tema para abrir todas as notícias da data selecionada.
+                </p>
               </div>
-              <span className="text-sm font-semibold text-[#597287]">{articles.length} {articles.length === 1 ? "notícia encontrada" : "notícias encontradas"}</span>
-            </div>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {topics.map((topic) => (
+                  <button key={topic.id} type="button" aria-pressed={chosenTopic === topic.id} onClick={() => chooseTopic(topic.id)}
+                    className={"group flex min-h-[230px] flex-col rounded-2xl border p-6 text-left transition hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#c3a26b] " +
+                      (chosenTopic === topic.id ? "border-[#0d3d62] bg-[#e6f0f7] shadow-[0_10px_25px_rgba(12,42,72,0.09)]" : "border-[#dbe4ed] bg-white")}>
+                    <span className="flex items-start justify-between gap-3">
+                      <span className="text-4xl leading-none" aria-hidden="true">{topicSymbol(topic.name)}</span>
+                      <span className="rounded-full bg-[#edf2f7] px-3 py-1 text-xs font-bold text-[#547089]">
+                        {topic.posts.length} {topic.posts.length === 1 ? "notícia" : "notícias"}
+                      </span>
+                    </span>
+                    <span className="mt-4 text-xl font-extrabold tracking-tight text-[#0d2f4d]">{topic.name}</span>
+                    <span className="mt-3 space-y-2 text-[0.78rem] leading-snug text-[#61788b]">
+                      {topic.posts.slice(0, 2).map((post) => (
+                        <span key={post.id} className="block border-l-2 border-[#d7bb87] pl-2">{post.title}</span>
+                      ))}
+                      {topic.posts.length > 2 ? <span className="block text-xs font-medium text-[#3c6c8f]">+ {topic.posts.length - 2} nesta seção</span> : null}
+                    </span>
+                    <span className="mt-auto pt-5 text-sm font-bold text-[#1d5d88] group-hover:underline">
+                      Abrir todas de {topic.name} <span aria-hidden="true">→</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
 
-            <div className="mt-7 grid gap-3 rounded-2xl border border-[#dce5ed] bg-white p-4 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end md:p-5">
-              <label className="block text-xs font-bold text-[#4d657b]">
-                Buscar notícias
-                <input type="search" value={search} onChange={(event) => { setSearch(event.target.value); setLimit(9); }}
-                  placeholder="Busque por tema ou palavra-chave"
-                  className="mt-2 h-11 w-full rounded-lg border border-[#cad7e2] bg-[#f9fbfd] px-3 text-sm font-normal text-[#183d59] outline-offset-2 placeholder:text-[#8698aa] focus-visible:outline-[#c39954]" />
-              </label>
-              <label className="block text-xs font-bold text-[#4d657b]">
-                Filtrar por data
-                <input type="date" value={day} onChange={(event) => { setDay(event.target.value); setLimit(9); }}
-                  className="mt-2 h-11 w-full min-w-[190px] rounded-lg border border-[#cad7e2] bg-[#f9fbfd] px-3 text-sm font-normal text-[#183d59] outline-offset-2 focus-visible:outline-[#c39954]" />
-              </label>
-              <button type="button" onClick={clearFilters} className="h-11 rounded-lg border border-[#cad7e2] px-4 text-sm font-semibold text-[#245a7f] hover:bg-[#eef4f9]">Limpar filtros</button>
-            </div>
+            {chosenTopic ? (
+              <div ref={readingRef} className="mt-11 scroll-mt-6">
+                <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className={overline + " text-[#b38b45]"}>Leitura do dia • {formatEditorialDate(day)}</p>
+                    <h2 className="mt-2 text-2xl font-extrabold md:text-3xl">
+                      {chosenTopic === "all" ? "Edição completa por assunto" : visibleTopics[0]?.name || "Notícias do dia"}
+                    </h2>
+                  </div>
+                  <button type="button" onClick={() => { setChosenTopic(null); setExpandedPosts([]); }}
+                    className="min-h-11 rounded-lg border border-[#cbd8e2] bg-white px-4 text-sm font-bold text-[#315d7d] hover:bg-[#eaf2f8]">
+                    Fechar leitura ↑
+                  </button>
+                </div>
 
-            <div className="mt-5 flex gap-2 overflow-x-auto pb-3" aria-label="Categorias de notícias">
-              <button type="button" aria-pressed={categoryId === "todas"} onClick={() => { setCategoryId("todas"); setLimit(9); }}
-                className={"shrink-0 rounded-full border px-4 py-2.5 text-sm font-semibold transition " + (categoryId === "todas" ? "border-[#092a47] bg-[#092a47] text-white" : "border-[#d2dfe9] bg-white text-[#48667e] hover:border-[#8daabf]")}>Todas</button>
-              {data.categories.map((cat) => (
-                <button key={cat.id} type="button" aria-pressed={categoryId === cat.id} onClick={() => { setCategoryId(cat.id); setLimit(9); }}
-                  className={"shrink-0 rounded-full border px-4 py-2.5 text-sm font-semibold transition " + (categoryId === cat.id ? "border-[#092a47] bg-[#092a47] text-white" : "border-[#d2dfe9] bg-white text-[#48667e] hover:border-[#8daabf]")}>{cat.name}</button>
-              ))}
-            </div>
+                <div className="space-y-6">
+                  {visibleTopics.map((topic) => (
+                    <section key={topic.id} aria-label={"Notícias de " + topic.name}
+                      className={surface + " overflow-hidden"}>
+                      <header className="flex flex-wrap items-center gap-4 border-b border-[#e0e8ef] bg-[#e8f0f6] px-5 py-6 sm:px-8">
+                        <span className="text-4xl" aria-hidden="true">{topicSymbol(topic.name)}</span>
+                        <div className="flex-1">
+                          <h3 className="text-xl font-extrabold tracking-tight sm:text-2xl">{topic.name}</h3>
+                          <p className="mt-1 text-xs font-semibold text-[#5e7b90]">{topic.posts.length} {topic.posts.length === 1 ? "notícia" : "notícias"} nesta edição</p>
+                        </div>
+                        <button type="button"
+                          onClick={() => setExpandedPosts((current) => {
+                            const allOpen = topic.posts.every((post) => current.includes(post.id));
+                            const others = current.filter((id) => !topic.posts.some((post) => post.id === id));
+                            return allOpen ? others : [...others, ...topic.posts.map((post) => post.id)];
+                          })}
+                          className="min-h-10 rounded-lg border border-[#b9cddd] bg-white px-3 text-xs font-bold text-[#24597c] hover:bg-[#f5f9fc]">
+                          {topic.posts.every((post) => expandedPosts.includes(post.id)) ? "Recolher todas" : "Ler textos completos"}
+                        </button>
+                      </header>
 
-            {articles.length ? (
-              <>
-                <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {articles.slice(0, limit).map((post, index) => (
-                    <button key={post.id} type="button" onClick={() => openPost(post)}
-                      className={card + " group flex min-h-[260px] flex-col p-6 text-left transition hover:-translate-y-1 hover:border-[#acbfd0] hover:shadow-lg"}>
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className={overline + " text-[#a67c37]"}>{data.categories.find((cat) => cat.id === post.categoryId)?.name || "Notícia"}</span>
-                        <time className="text-xs font-semibold text-[#7d8fa1]" dateTime={post.publishedAt}>{formatEditorialDate(post.publishedAt)}</time>
-                      </div>
-                      <h3 className="mt-5 text-[1.3rem] font-extrabold leading-snug tracking-tight group-hover:text-[#1e638f]">{post.title}</h3>
-                      <p className="mt-3 line-clamp-3 text-sm leading-relaxed text-[#657b8e]">{post.summary}</p>
-                      <span className="mt-auto pt-7 text-sm font-bold text-[#1e608c]">Ler notícia <span aria-hidden="true">↗</span></span>
-                    </button>
+                      <ol className="divide-y divide-[#e6edf3]">
+                        {topic.posts.map((post, index) => {
+                          const expanded = expandedPosts.includes(post.id);
+                          return (
+                            <li key={post.id} className="px-5 py-6 sm:px-8 sm:py-7">
+                              <div className="flex items-start gap-4">
+                                <span className="w-8 shrink-0 pt-1 text-xl font-extrabold text-[#b38b45]">
+                                  {String(index + 1).padStart(2, "0")}
+                                </span>
+                                <div className="min-w-0 flex-1">
+                                  <button type="button" aria-expanded={expanded}
+                                    onClick={() => togglePost(post.id)}
+                                    className="group w-full text-left focus-visible:rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b38b45]">
+                                    <span className="flex items-start gap-3">
+                                      <span className="min-w-0 flex-1 text-lg font-extrabold leading-snug tracking-tight text-[#102f4b] group-hover:text-[#23658f] sm:text-xl">{post.title}</span>
+                                      <span aria-hidden="true" className="shrink-0 text-lg text-[#3e6c8a]">{expanded ? "−" : "+"}</span>
+                                    </span>
+                                  </button>
+                                  <p className="mt-2 text-sm leading-relaxed text-[#647d90]">{post.summary}</p>
+                                  {expanded ? (
+                                    <div className="mt-5 space-y-4 text-[0.94rem] leading-[1.85] text-[#314b61]">
+                                      {post.content.split(/\n\s*\n/).filter(Boolean).map((paragraph, pIndex) => (
+                                        <p key={pIndex} className="whitespace-pre-line">{paragraph}</p>
+                                      ))}
+                                      {post.impact ? (
+                                        <div className="rounded-xl border-l-4 border-[#d6aa59] bg-[#eff5f9] p-5">
+                                          <p className={overline + " text-[#956d2b]"}>Por que importa?</p>
+                                          <p className="mt-2 whitespace-pre-line leading-relaxed text-[#203b53]">{post.impact}</p>
+                                        </div>
+                                      ) : null}
+                                      <p className="text-xs leading-relaxed text-[#798b9b]">Fonte: {post.source || "Panorama 360°"}</p>
+                                      <button type="button" onClick={() => openPost(post)}
+                                        className="inline-flex min-h-10 items-center text-sm font-bold text-[#215f88] underline-offset-4 hover:underline">
+                                        Abrir e compartilhar esta notícia ↗
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button type="button" onClick={() => togglePost(post.id)}
+                                      className="mt-3 inline-flex min-h-10 items-center text-sm font-bold text-[#21628d] hover:underline">
+                                      Ler notícia completa ↓
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ol>
+                    </section>
                   ))}
                 </div>
-                {articles.length > limit ? (
-                  <div className="mt-8 text-center">
-                    <button type="button" onClick={() => setLimit(limit + 9)} className="rounded-xl border border-[#b9cddd] bg-white px-6 py-3 text-sm font-bold text-[#245c84] hover:bg-[#eaf2f9]">Mostrar mais notícias</button>
-                  </div>
-                ) : null}
-              </>
+              </div>
             ) : (
-              <section className={card + " mt-6 px-6 py-14 text-center"}>
-                <h3 className="text-xl font-bold">{available.length ? "Nenhuma notícia encontrada" : "Primeiras publicações em preparação"}</h3>
-                <p className="mt-2 text-sm text-[#637a8e]">{available.length ? "Altere a busca, a categoria ou a data selecionada." : "Em breve, as notícias e análises do Panorama 360° estarão disponíveis aqui."}</p>
-                {available.length ? <button type="button" onClick={clearFilters} className="mt-5 text-sm font-semibold text-[#1d5c88] underline">Mostrar todas as notícias</button> : null}
-              </section>
+              <p className="mt-8 text-center text-sm text-[#72879a]">Clique em um assunto para ler todas as notícias reunidas naquele tema.</p>
             )}
           </>
+        ) : (
+          <section className={surface + " p-8 text-center sm:p-12"}>
+            <p className={overline + " text-[#af8645]"}>Panorama 360°</p>
+            <h2 className="mt-3 text-2xl font-extrabold tracking-tight md:text-3xl">Primeiras edições em preparação</h2>
+            <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-[#617b8f]">
+              Assim que o Robson publicar as notícias, você poderá escolher a data e navegar por Brasil, Mundo e outros assuntos, com todas as matérias reunidas em cada seção.
+            </p>
+          </section>
         )}
-        <p className="mt-12 text-center text-xs leading-relaxed text-[#8191a1]">Panorama 360° — Robson Santiago. Conteúdo informativo, com fontes identificadas em cada notícia.</p>
+        <p className="mt-12 text-center text-xs leading-relaxed text-[#8191a1]">
+          Panorama 360° — Robson Santiago. Conteúdo informativo, com fontes identificadas nas notícias.
+        </p>
       </div>
+
       <footer className="border-t border-[#dfe7ed] bg-white px-5 py-8 text-center">
         <p className="font-black tracking-tight text-[#0a2d4a]">PANORAMA <span className="text-[#c0954a]">360°</span></p>
         <p className="mt-2 text-xs text-[#718498]">Robson Santiago • A notícia, o contexto e o que realmente importa.</p>

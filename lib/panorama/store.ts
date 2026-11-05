@@ -16,6 +16,7 @@ export type DbPanoramaPost = {
   source: string;
   published_on: string;
   status: "draft" | "published";
+  featured: boolean;
 };
 
 export async function readPanoramaData(admin: boolean) {
@@ -32,7 +33,7 @@ export async function readPanoramaData(admin: boolean) {
   for (let offset = 0; offset < 10000; offset += 500) {
     let query = supabase
       .from("panorama_posts")
-      .select("id,category_id,title,summary,content,impact,source,published_on,status");
+      .select("id,category_id,title,summary,content,impact,source,published_on,status,featured");
     if (!admin) query = query.eq("status", "published");
     const { data: page, error } = await query
       .order("published_on", { ascending: false })

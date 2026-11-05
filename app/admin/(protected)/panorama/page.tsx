@@ -276,7 +276,7 @@ export default function PanoramaAdminPreview() {
               <h2 className="mt-3 text-2xl font-extrabold leading-tight">Um Panorama inteiro, de uma só vez.</h2>
               <p className="mt-3 text-sm leading-relaxed text-[#667d90]">Cole o texto da edição. A prévia identifica matérias numeradas e separa o bloco “Por que importa?”. Você revisa e escolhe o que publicar.</p>
               <button type="button" onClick={() => goTo("importar")} className={primary + " mt-6 w-full"}>Importar texto completo →</button>
-              <button type="button" onClick={() => { setEditing(newPost(data.categories[0]?.id || "")); goTo("publicacoes"); setEditing(newPost(data.categories[0]?.id || "")); }} className={secondary + " mt-3 w-full"}>Escrever notícia avulsa</button>
+              <button type="button" onClick={() => { goTo("publicacoes"); setEditing(newPost(data.categories[0]?.id || "")); }} className={secondary + " mt-3 w-full"}>Escrever notícia avulsa</button>
               <button type="button" onClick={() => goTo("categorias")} className="mt-5 w-full text-center text-sm font-bold text-[#1d628f] hover:underline">Gerenciar categorias →</button>
             </aside>
           </section>

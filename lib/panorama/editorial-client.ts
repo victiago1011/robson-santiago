@@ -12,6 +12,7 @@ export type EditorialPost = {
   impact: string;
   publishedAt: string;
   status: "Rascunho" | "Publicado";
+  featured: boolean;
   source: string;
 };
 export type EditorialState = { categories: EditorialCategory[]; posts: EditorialPost[] };
@@ -20,7 +21,7 @@ type RawPanorama = {
   categories: EditorialCategory[];
   posts: Array<{
     id: string; title: string; category_id: string; summary: string; content: string;
-    impact: string; source: string; published_on: string; status: "draft" | "published";
+    impact: string; source: string; published_on: string; status: "draft" | "published"; featured: boolean;
   }>;
 };
 
@@ -37,6 +38,7 @@ function mapDbState(raw: RawPanorama): EditorialState {
       source: post.source,
       publishedAt: post.published_on,
       status: post.status === "published" ? "Publicado" : "Rascunho",
+      featured: post.featured,
     })),
   };
 }
@@ -52,6 +54,7 @@ function toDbPost(post: EditorialPost) {
     source: post.source,
     published_on: post.publishedAt,
     status: post.status === "Publicado" ? "published" : "draft",
+    featured: post.featured,
   };
 }
 
@@ -80,6 +83,9 @@ export function usePanoramaContent(initial?: EditorialState) {
   };
 
   useEffect(() => {
+    // Server-rendered pages already have fresh initial data. Avoid making the
+    // browser load the same Supabase content a second time at hydration.
+    if (initial) return;
     void reload();
     // Initial request only; other requests are triggered after writes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -220,6 +226,7 @@ export function parsePanoramaText(raw: string, date: string, categories: Editori
     impact: item.impact.join("\n\n"),
     publishedAt: date,
     status: "Rascunho",
+    featured: false,
     source: "Texto importado para revisão — notícia " + (index + 1),
   }));
 }

@@ -14,7 +14,7 @@ export function AdminFrame({
   return (
     <div className="min-h-dvh flex-1 bg-paper text-ink">
       <AdminNav counts={counts} />
-      <div className="min-w-0 md:pl-64">
+      <div className="min-w-0 lg:pl-72">
         <main className="mx-auto w-full max-w-6xl overflow-x-clip px-4 py-6 sm:px-6 md:px-8 md:py-10">
           {children}
         </main>

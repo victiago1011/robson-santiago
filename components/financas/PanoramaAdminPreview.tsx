@@ -17,6 +17,13 @@ const panel = "rounded-2xl border border-[#dfe6eb] bg-white shadow-[0_8px_24px_r
 const field = "mt-1.5 w-full rounded-lg border border-[#cbd7e1] bg-white px-3 py-2.5 text-sm text-[#19364d] outline-offset-2 focus-visible:outline-[#b98a3e]";
 const primary = "inline-flex min-h-11 items-center justify-center rounded-xl bg-[#0b2a45] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#1a4d71]";
 const secondary = "inline-flex min-h-11 items-center justify-center rounded-xl border border-[#cbd8e1] bg-white px-4 py-2.5 text-sm font-semibold text-[#315d7d] hover:bg-[#eff4f8]";
+function todayInBrazil() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date());
+}
+
 const exampleText = [
   "🇧🇷 BRASIL — ECONOMIA E POLÍTICA",
   "1. Banco Central e o cenário de juros",
@@ -44,7 +51,7 @@ function newPost(categoryId: string): EditorialPost {
     summary: "",
     content: "",
     impact: "",
-    publishedAt: new Date().toISOString().slice(0, 10),
+    publishedAt: todayInBrazil(),
     status: "Rascunho",
     source: "Texto próprio de Robson Santiago",
   };
@@ -99,7 +106,7 @@ export default function PanoramaAdminPreview() {
   const { data, save, loading, busy, error, reload, mode } = useEditorialPreview();
   const [view, setView] = useState<View>("visao");
   const [rawText, setRawText] = useState("");
-  const [importDate, setImportDate] = useState("2026-11-05");
+  const [importDate, setImportDate] = useState(todayInBrazil);
   const [drafts, setDrafts] = useState<ImportDraft[]>([]);
   const [notice, setNotice] = useState("");
   const [editing, setEditing] = useState<EditorialPost | null>(null);
@@ -264,10 +271,10 @@ export default function PanoramaAdminPreview() {
         <>
           <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Indicadores editoriais">
             {[
-              ["Notícias publicadas", published, "Visíveis na prévia"],
+              ["Notícias publicadas", published, mode === "demo" ? "Visíveis na prévia" : "Visíveis no portal"],
               ["Rascunhos", draftCount, "Aguardando revisão"],
               ["Categorias", data.categories.length, "Criadas no painel"],
-              ["Total de publicações", data.posts.length, "Conteúdo de demonstração"],
+              ["Total de publicações", data.posts.length, mode === "demo" ? "Conteúdo de demonstração" : "Cadastradas no Supabase"],
             ].map(([label, value, subtitle], i) => (
               <div key={label} className={"rounded-2xl border p-5 " + (i === 0 ? "border-[#0a2945] bg-[#0a2945] text-white" : "border-[#e0e6ed] bg-white")}>
                 <p className={overline + (i === 0 ? " text-[#c4d6e5]" : " text-[#708296]")}>{label}</p>

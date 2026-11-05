@@ -6,13 +6,14 @@ import {
   formatEditorialDate,
   useEditorialPreview,
   type EditorialPost,
+  type EditorialState,
 } from "@/lib/panorama/preview-store";
 
 const overline = "text-[0.7rem] font-extrabold uppercase tracking-[0.15em]";
 const card = "rounded-2xl border border-[#dbe4ed] bg-white shadow-[0_12px_32px_rgba(11,36,60,0.035)]";
 
-export default function PanoramaPortal() {
-  const { data, loading, error, reload, mode } = useEditorialPreview();
+export default function PanoramaPortal({ initialData }: { initialData?: EditorialState }) {
+  const { data, loading, error, reload, mode } = useEditorialPreview(initialData);
   const [categoryId, setCategoryId] = useState("todas");
   const [search, setSearch] = useState("");
   const [day, setDay] = useState("");

@@ -1,0 +1,44 @@
+name: Supabase activity check
+
+on:
+  schedule:
+    # 08:00 and 20:00 America/Sao_Paulo (UTC-3).
+    - cron: "0 11,23 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-activity-check
+  cancel-in-progress: false
+
+jobs:
+  check-database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Query Supabase (read-only)
+        env:
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_KEEPALIVE_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_SECRET_KEY}" ]; then
+            echo "::error::Configure the SUPABASE_KEEPALIVE_KEY repository secret."
+            exit 1
+          fi
+          # Read-only request; no records returned and no customer data logged.
+          # A successful query generates database activity even with zero rows.
+          code=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            --connect-timeout 10 --max-time 35 --retry 2 --retry-delay 3 \
+            --get 'https://mixhjqsaiwiulovcwnrq.supabase.co/rest/v1/admin_users' \
+            --data-urlencode 'select=user_id' \
+            --data-urlencode 'limit=0' \
+            --header "apikey: ${SUPABASE_SECRET_KEY}" \
+            --header "Authorization: Bearer ${SUPABASE_SECRET_KEY}")
+          if [ "$code" != "200" ] && [ "$code" != "206" ]; then
+            echo "::error::Supabase read-only query failed with HTTP $code"
+            exit 1
+          fi
+          echo "Supabase database responded successfully."

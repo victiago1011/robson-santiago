@@ -44,6 +44,10 @@ function NavLinks({
       ],
     },
     {
+      label: "Conteúdo",
+      items: [{ href: "/admin/panorama", label: "Panorama 360°", exact: true }],
+    },
+    {
       label: "Logística",
       items: [
         {

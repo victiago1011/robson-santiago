@@ -32,12 +32,12 @@ export async function readPanoramaData(admin: boolean) {
   for (let offset = 0; offset < 10000; offset += 500) {
     let query = supabase
       .from("panorama_posts")
-      .select("id,category_id,title,summary,content,impact,source,published_on,status")
+      .select("id,category_id,title,summary,content,impact,source,published_on,status");
+    if (!admin) query = query.eq("status", "published");
+    const { data: page, error } = await query
       .order("published_on", { ascending: false })
       .order("created_at", { ascending: false })
       .range(offset, offset + 499);
-    if (!admin) query = query.eq("status", "published");
-    const { data: page, error } = await query;
     if (error) throw error;
     const current = (page || []) as DbPanoramaPost[];
     posts.push(...current);

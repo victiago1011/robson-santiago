@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import PanoramaPortal from "@/components/financas/PanoramaPortal";
 import { readPanoramaData } from "@/lib/panorama/store";
-import type { EditorialState } from "@/lib/panorama/preview-store";
+import type { EditorialState } from "@/lib/panorama/editorial-client";
 
 export const dynamic = "force-dynamic";
 

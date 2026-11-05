@@ -96,7 +96,7 @@ function FormFields({
 }
 
 export default function PanoramaAdminPreview() {
-  const { data, save } = useEditorialPreview();
+  const { data, save, loading, busy, error, reload, mode } = useEditorialPreview();
   const [view, setView] = useState<View>("visao");
   const [rawText, setRawText] = useState("");
   const [importDate, setImportDate] = useState("2026-11-05");
@@ -135,76 +135,96 @@ export default function PanoramaAdminPreview() {
     setDrafts((prev) => prev.map((draft) => draft.id === id ? { ...next, selected: draft.selected } : draft));
   }
 
-  function commitImport(status: EditorialPost["status"]) {
+  async function persist(next: typeof data): Promise<boolean> {
+    try {
+      await save(next);
+      return true;
+    } catch (cause) {
+      setNotice(cause instanceof Error ? cause.message : "Falha ao salvar. Confira a conexão.");
+      return false;
+    }
+  }
+
+  async function commitImport(status: EditorialPost["status"]) {
     const chosen = drafts.filter((draft) => draft.selected && draft.title.trim() && draft.content.trim());
     if (!chosen.length) {
       setNotice("Selecione ao menos uma notícia com título e texto para continuar.");
       return;
     }
     const posts = chosen.map(({ selected: _selected, ...post }) => ({ ...post, status }));
-    save({ ...data, posts: [...posts, ...data.posts] });
+    if (!await persist({ ...data, posts: [...posts, ...data.posts] })) return;
     setDrafts([]);
     setRawText("");
-    setNotice(posts.length + (status === "Publicado" ? " notícia(s) publicada(s) apenas nesta prévia." : " rascunho(s) salvo(s) apenas nesta prévia."));
+    setNotice(posts.length + (status === "Publicado" ? " notícia(s) publicada(s)." : " rascunho(s) salvo(s)."));
     setView("publicacoes");
   }
 
-  function savePost(event: FormEvent<HTMLFormElement>) {
+  async function savePost(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!editing || !editing.title.trim() || !editing.content.trim()) return;
     const exists = data.posts.some((post) => post.id === editing.id);
-    save({
+    if (!await persist({
       ...data,
       posts: exists ? data.posts.map((post) => post.id === editing.id ? editing : post) : [editing, ...data.posts],
-    });
+    })) return;
     setEditing(null);
-    setNotice("Publicação atualizada apenas na demonstração deste navegador.");
+    setNotice("Publicação salva com sucesso.");
   }
 
-  function removePost(post: EditorialPost) {
-    if (!window.confirm("Excluir esta notícia da demonstração?")) return;
-    save({ ...data, posts: data.posts.filter((entry) => entry.id !== post.id) });
-    setNotice("Notícia excluída da demonstração.");
+  async function removePost(post: EditorialPost) {
+    if (!window.confirm("Confirma a exclusão desta notícia?")) return;
+    if (!await persist({ ...data, posts: data.posts.filter((entry) => entry.id !== post.id) })) return;
+    setNotice("Notícia excluída.");
   }
 
-  function addCategory(event: FormEvent<HTMLFormElement>) {
+  async function addCategory(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const name = addingCategory.trim();
     if (!uniqueCategoryName(data.categories, name)) {
       setNotice("Digite um nome de categoria válido e ainda não utilizado.");
       return;
     }
-    save({ ...data, categories: [...data.categories, { id: crypto.randomUUID(), name }] });
+    if (!await persist({ ...data, categories: [...data.categories, { id: crypto.randomUUID(), name }] })) return;
     setAddingCategory("");
-    setNotice("Categoria '" + name + "' disponível para notícias na prévia.");
+    setNotice("Categoria '" + name + "' criada com sucesso.");
   }
 
-  function renameCategory(event: FormEvent<HTMLFormElement>) {
+  async function renameCategory(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!renamingId || !uniqueCategoryName(data.categories, renamingValue, renamingId)) {
       setNotice("Nome inválido ou já utilizado em outra categoria.");
       return;
     }
-    save({
+    if (!await persist({
       ...data,
       categories: data.categories.map((cat) => cat.id === renamingId ? { ...cat, name: renamingValue.trim() } : cat),
-    });
+    })) return;
     setRenamingId(null);
     setNotice("Categoria renomeada. As notícias vinculadas foram preservadas.");
   }
 
-  function deleteCategory(id: string) {
+  async function deleteCategory(id: string) {
     const count = data.posts.filter((post) => post.categoryId === id).length;
     if (count) {
       setNotice("Esta categoria tem " + count + " notícia(s). Reclassifique as notícias antes de excluir.");
       return;
     }
-    if (!window.confirm("Excluir esta categoria vazia da demonstração?")) return;
-    save({ ...data, categories: data.categories.filter((cat) => cat.id !== id) });
-    setNotice("Categoria excluída da demonstração.");
+    if (!window.confirm("Excluir esta categoria vazia?")) return;
+    if (!await persist({ ...data, categories: data.categories.filter((cat) => cat.id !== id) })) return;
+    setNotice("Categoria excluída.");
   }
 
   const selectedCount = drafts.filter((d) => d.selected).length;
+
+  if (loading) {
+    return <div className="rounded-2xl border border-[#dfe6eb] bg-white p-8 text-sm text-[#567186]" role="status">Carregando o painel editorial…</div>;
+  }
+  if (error) {
+    return <div className="rounded-2xl border border-[#ead6b9] bg-[#fff9ec] p-8 text-sm text-[#754b29]">
+      <p>{error}</p>
+      <button type="button" className={primary + " mt-4"} onClick={() => void reload()}>Tentar novamente</button>
+    </div>;
+  }
 
   return (
     <div className="space-y-7 font-sans text-[#142e44]">
@@ -220,7 +240,10 @@ export default function PanoramaAdminPreview() {
       </header>
 
       <div role="note" className="rounded-xl border border-[#ead09c] bg-[#fff9e9] px-4 py-3 text-sm leading-relaxed text-[#775829]">
-        <strong>Protótipo interativo:</strong> as mudanças são armazenadas apenas no navegador para demonstração. Não há publicação real, importação com IA, gravação no Supabase ou alteração do site oficial. Revise as informações antes de qualquer publicação futura.
+        {mode === "demo"
+          ? <><strong>Protótipo interativo:</strong> alterações armazenadas somente neste navegador, sem gravação no Supabase.</>
+          : <><strong>Gestão editorial real:</strong> alterações são gravadas no Supabase. Notícias publicadas aparecem no portal público. Revise os fatos e as fontes antes de publicar.</>}
+        {busy ? <p className="mt-2 font-semibold" role="status">Salvando alterações no servidor…</p> : null}
       </div>
 
       <div className="flex gap-2 overflow-x-auto border-b border-[#d7e1e8] pb-3" aria-label="Áreas do painel editorial">
@@ -334,10 +357,10 @@ export default function PanoramaAdminPreview() {
                 ))}
               </div>
               <div className="mt-6 flex flex-wrap gap-3 border-t border-[#e6edf2] pt-5">
-                <button type="button" onClick={() => commitImport("Rascunho")} disabled={!selectedCount} className={secondary + " disabled:opacity-40"}>Salvar selecionadas como rascunho</button>
-                <button type="button" onClick={() => commitImport("Publicado")} disabled={!selectedCount} className={primary + " disabled:opacity-40"}>Publicar selecionadas na prévia →</button>
+                <button type="button" onClick={() => commitImport("Rascunho")} disabled={!selectedCount || busy} className={secondary + " disabled:opacity-40"}>Salvar selecionadas como rascunho</button>
+                <button type="button" onClick={() => commitImport("Publicado")} disabled={!selectedCount || busy} className={primary + " disabled:opacity-40"}>Publicar selecionadas na prévia →</button>
               </div>
-              <p className="mt-4 text-xs leading-relaxed text-[#72869a]">A separação é automática, mas a conferência dos fatos, fontes e categorias deve ser feita pelo administrador. A importação real terá validação antes de entrar em produção.</p>
+              <p className="mt-4 text-xs leading-relaxed text-[#72869a]">A separação é automática, mas a conferência dos fatos, fontes e categorias deve ser feita pelo administrador. A publicação requer revisão manual de cada notícia e de suas fontes.</p>
             </section>
           ) : null}
         </div>
@@ -352,7 +375,7 @@ export default function PanoramaAdminPreview() {
                 <button type="button" onClick={() => setEditing(null)} className={secondary}>Cancelar</button>
               </div>
               <div className="mt-6"><FormFields value={editing} categories={data.categories} onChange={setEditing} /></div>
-              <button type="submit" className={primary + " mt-6"}>Salvar na demonstração</button>
+              <button type="submit" disabled={busy} className={primary + " mt-6 disabled:opacity-40"}>Salvar publicação</button>
             </form>
           ) : (
             <>
@@ -393,7 +416,7 @@ export default function PanoramaAdminPreview() {
         <section className={panel + " p-5 md:p-7"}>
           <p className={overline + " text-[#a17a3e]"}>Organização por temas</p>
           <h2 className="mt-2 text-2xl font-extrabold">Categorias de notícias</h2>
-          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[#647b8d]">Crie os temas que fazem sentido para o Robson. As categorias não são fixas no código: o que aparecer no portal será definido aqui. Esta tela salva alterações apenas na prévia do navegador.</p>
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[#647b8d]">Crie os temas que fazem sentido para o Robson. As categorias não são fixas no código: o que aparecer no portal será definido aqui.</p>
           <form onSubmit={addCategory} className="mt-6 flex flex-wrap items-end gap-3">
             <label className="min-w-[230px] flex-1 text-sm font-semibold">Nome da nova categoria
               <input className={field} value={addingCategory} onChange={(e) => setAddingCategory(e.target.value)} placeholder="Ex.: Tecnologia, Agro, Geopolítica" required />
@@ -428,7 +451,7 @@ export default function PanoramaAdminPreview() {
       ) : null}
 
       <p className="border-t border-[#dce5ec] pt-5 text-xs leading-relaxed text-[#788a9c]">
-        Próximo passo após aprovação: substituir o armazenamento local pelo banco de dados, manter versões de rascunho e incluir revisão de fontes antes de publicar. A parte comercial do ADM permanece separada e não foi modificada.
+        A gestão editorial utiliza o Supabase no ADM autenticado. No endereço demonstrativo, as operações continuam locais. A parte comercial permanece independente.
       </p>
     </div>
   );

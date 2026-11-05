@@ -205,9 +205,9 @@ export default function PanoramaPortal({ initialData }: { initialData?: Editoria
               </>
             ) : (
               <section className={card + " mt-6 px-6 py-14 text-center"}>
-                <h3 className="text-xl font-bold">Nenhuma notícia encontrada</h3>
-                <p className="mt-2 text-sm text-[#637a8e]">Altere a busca, a categoria ou a data selecionada.</p>
-                <button type="button" onClick={clearFilters} className="mt-5 text-sm font-semibold text-[#1d5c88] underline">Mostrar todas as notícias</button>
+                <h3 className="text-xl font-bold">{available.length ? "Nenhuma notícia encontrada" : "Primeiras publicações em preparação"}</h3>
+                <p className="mt-2 text-sm text-[#637a8e]">{available.length ? "Altere a busca, a categoria ou a data selecionada." : "Em breve, as notícias e análises do Panorama 360° estarão disponíveis aqui."}</p>
+                {available.length ? <button type="button" onClick={clearFilters} className="mt-5 text-sm font-semibold text-[#1d5c88] underline">Mostrar todas as notícias</button> : null}
               </section>
             )}
           </>

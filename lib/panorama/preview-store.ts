@@ -96,9 +96,9 @@ function toDbPost(post: EditorialPost) {
   };
 }
 
-export function useEditorialPreview() {
-  const [data, setData] = useState<EditorialState>({ categories: [], posts: [] });
-  const [loading, setLoading] = useState(true);
+export function useEditorialPreview(initial?: EditorialState) {
+  const [data, setData] = useState<EditorialState>(initial ?? { categories: [], posts: [] });
+  const [loading, setLoading] = useState(!initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const saving = useRef(false);

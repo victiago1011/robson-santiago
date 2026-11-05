@@ -12,7 +12,7 @@ const overline = "text-[0.7rem] font-extrabold uppercase tracking-[0.15em]";
 const card = "rounded-2xl border border-[#dbe4ed] bg-white shadow-[0_12px_32px_rgba(11,36,60,0.035)]";
 
 export default function PanoramaPortal() {
-  const { data } = useEditorialPreview();
+  const { data, loading, error, reload, mode } = useEditorialPreview();
   const [categoryId, setCategoryId] = useState("todas");
   const [search, setSearch] = useState("");
   const [day, setDay] = useState("");
@@ -108,7 +108,15 @@ export default function PanoramaPortal() {
       </section>
 
       <div className="mx-auto max-w-[1230px] px-5 pb-16 pt-9 md:px-8 md:pt-12">
-        {selected ? (
+        {loading ? (
+          <section role="status" className={card + " p-10 text-center text-[#58748b]"}>Carregando notícias do Panorama 360°…</section>
+        ) : error ? (
+          <section role="alert" className={card + " p-10 text-center"}>
+            <h2 className="text-xl font-bold">Não foi possível carregar as notícias</h2>
+            <p className="mt-3 text-sm text-[#6d8296]">{error}</p>
+            <button type="button" onClick={() => void reload()} className="mt-5 rounded-lg bg-[#0b2a45] px-5 py-3 text-sm font-bold text-white">Tentar novamente</button>
+          </section>
+        ) : selected ? (
           <div className="mx-auto max-w-[950px]">
             <button type="button" onClick={closePost} className="mb-6 inline-flex min-h-11 items-center gap-2 text-sm font-bold text-[#1b5c8a] hover:underline">← Todas as notícias</button>
             <article className={card + " overflow-hidden"}>
@@ -203,7 +211,7 @@ export default function PanoramaPortal() {
             )}
           </>
         )}
-        <p className="mt-12 text-center text-xs leading-relaxed text-[#8191a1]">Pré-visualização de design. Notícias e datas de demonstração sujeitas a conferência editorial; não representam um serviço de cotações ou notícias em tempo real.</p>
+        <p className="mt-12 text-center text-xs leading-relaxed text-[#8191a1]">{mode === "demo" ? "Pré-visualização de design." : "Panorama 360° — Robson Santiago."} Conteúdo informativo, com fontes identificadas em cada notícia.</p>
       </div>
       <footer className="border-t border-[#dfe7ed] bg-white px-5 py-8 text-center">
         <p className="font-black tracking-tight text-[#0a2d4a]">PANORAMA <span className="text-[#c0954a]">360°</span></p>

@@ -181,7 +181,13 @@ export default function PanoramaPortal({ initialData }: { initialData?: Editoria
                   </ol>
                 </div>
               </section>
-            ) : null}
+            ) : (
+              <section aria-label="Tudo que você precisa saber em 60 segundos" className="mb-10 rounded-2xl border border-[#dce5ec] bg-white px-6 py-7 sm:px-8">
+                <p className={overline + " text-[#a68145]"}>Panorama rápido</p>
+                <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-[#12324e]">Tudo que você precisa saber em 60 segundos</h2>
+                <p className="mt-3 max-w-2xl text-sm text-[#667b8d]">Os cinco principais assuntos aparecerão aqui assim que as primeiras notícias forem publicadas.</p>
+              </section>
+            )}
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
                 <p className={overline + " text-[#b38b45]"}>Atualizações e análises</p>

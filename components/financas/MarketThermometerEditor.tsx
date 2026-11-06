@@ -11,7 +11,10 @@ import {
 
 const field = "mt-1.5 w-full min-w-0 rounded-lg border border-[#cbd7e1] bg-white px-3 py-2.5 text-sm text-[#19364d] outline-offset-2 focus-visible:outline-[#b98a3e]";
 
-export default function MarketThermometerEditor() {
+export default function MarketThermometerEditor({ dates = [] }: { dates?: string[] }) {
+  const [editionDay, setEditionDay] = useState(() => dates[0] || new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date()));
   const [items, setItems] = useState<MarketIndicator[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -23,7 +26,7 @@ export default function MarketThermometerEditor() {
     setFailed(false);
     setNotice("");
     try {
-      const response = await fetch("/api/admin/panorama/market", { cache: "no-store" });
+      const response = await fetch("/api/admin/panorama/market?date=" + encodeURIComponent(editionDay), { cache: "no-store" });
       if (!response.ok) throw new Error("Não foi possível carregar os indicadores.");
       const body = await response.json() as { indicators: MarketIndicator[] };
       setItems(body.indicators);
@@ -33,7 +36,7 @@ export default function MarketThermometerEditor() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [editionDay]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -56,7 +59,7 @@ export default function MarketThermometerEditor() {
         method: "PUT",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ indicators: items.map(({ slug, display_value, variation, direction, reference_on, visible }) => ({
+        body: JSON.stringify({ edition_on: editionDay, indicators: items.map(({ slug, display_value, variation, direction, reference_on, visible }) => ({
           slug, display_value, variation, direction, reference_on, visible,
         })) }),
       });
@@ -64,7 +67,7 @@ export default function MarketThermometerEditor() {
         const body = await response.json().catch(() => ({})) as { error?: string };
         throw new Error(body.error || "Falha ao salvar.");
       }
-      setNotice("Termômetro atualizado com sucesso. Os indicadores visíveis já aparecem na página de Finanças.");
+      setNotice("Termômetro da edição de " + editionDay.split("-").reverse().join("/") + " salvo. Os cards visíveis aparecem somente nessa edição.");
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "Falha ao salvar.");
     } finally {
@@ -80,15 +83,30 @@ export default function MarketThermometerEditor() {
   return (
     <section className="space-y-6">
       <header className="rounded-2xl border border-[#dce5ed] bg-white p-6 md:p-8">
-        <p className="text-[0.7rem] font-bold uppercase tracking-[0.15em] text-[#b1833e]">Edição manual · Sem cotações automáticas</p>
+        <p className="text-[0.7rem] font-bold uppercase tracking-[0.15em] text-[#b1833e]">Histórico por edição · Sem cotações automáticas</p>
         <h2 className="mt-2 text-2xl font-extrabold text-[#132f49] md:text-3xl">Termômetro econômico</h2>
         <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[#5e7588]">
           Preencha os números, a variação e selecione ↑ alta, ↓ queda ou — neutro.
           A seta indica apenas o movimento — não se é uma notícia boa ou ruim.
-          Para publicar um card, marque <strong>Exibir no site</strong> e informe a data de referência.
+          Para exibir um card nesta edição, marque <strong>Exibir no site</strong> e informe a data de referência do número (que pode ser o dia útil anterior).
         </p>
       </header>
 
+      <div className="rounded-2xl border border-[#dce5ed] bg-[#edf4f9] p-5">
+        <label className="block max-w-xs text-sm font-extrabold text-[#244b66]">
+          📅 Data da edição que você está editando
+          <input type="date" className={field} value={editionDay} onChange={(e) => setEditionDay(e.target.value)} />
+        </label>
+        <p className="mt-3 text-sm text-[#55748a]">
+          Os valores salvos pertencem exclusivamente à data acima. Escolher outro dia carrega os indicadores daquela edição, sem copiar as cotações atuais.
+        </p>
+        {dates.length > 0 ? <div className="mt-3 flex flex-wrap gap-2">
+          {dates.slice(0, 8).map((day) => <button type="button" key={day} onClick={() => setEditionDay(day)}
+            className={"rounded-lg border px-3 py-2 text-xs font-semibold " + (day === editionDay ? "border-[#0b2a45] bg-[#0b2a45] text-white" : "border-[#b7ccdb] bg-white text-[#335d7c]")}>
+            {day.split("-").reverse().join("/")}
+          </button>)}
+        </div> : null}
+      </div>
       <div className="grid gap-4 lg:grid-cols-2">
         {items.map((item) => {
           const movement = marketMovement(item.direction);

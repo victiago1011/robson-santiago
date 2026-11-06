@@ -26,25 +26,6 @@ function todayInBrazil() {
   }).format(new Date());
 }
 
-const exampleText = [
-  "🇧🇷 BRASIL — ECONOMIA E POLÍTICA",
-  "1. Banco Central e o cenário de juros",
-  "O Banco Central permanece no centro das discussões sobre crédito, inflação e atividade econômica.",
-  "POR QUE IMPORTA?",
-  "As decisões de juros influenciam o custo do crédito para famílias e empresas.",
-  "",
-  "2. Planejamento financeiro ganha importância",
-  "O ambiente econômico exige disciplina e atenção aos fluxos de caixa.",
-  "POR QUE IMPORTA?",
-  "Planejamento e previsibilidade ajudam a lidar com cenários incertos.",
-  "",
-  "🌎 MUNDO — GEOPOLÍTICA E MERCADOS",
-  "3. Mercados internacionais acompanham o cenário político",
-  "Mudanças políticas e econômicas podem alterar expectativas sobre comércio e investimentos.",
-  "POR QUE IMPORTA?",
-  "Acompanhamento de riscos internacionais ajuda a contextualizar decisões locais.",
-].join("\n");
-
 function newPost(categoryId: string): EditorialPost {
   return {
     id: crypto.randomUUID(),
@@ -388,7 +369,7 @@ export default function PanoramaAdminPreview({ initialData }: { initialData?: Ed
             <h2 className="mt-2 text-2xl font-extrabold">Escreva ou cole a edição completa</h2>
             <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[#667b8e]">Escreva ou cole o texto do Panorama neste campo. O sistema reconhece matérias que começam por “1. Título”, “2. Título” e assim por diante, além de seções como Brasil, Mundo e “Por que importa?”. Não é necessário preencher um formulário por notícia.</p>
             <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
-              <label className="block text-sm font-semibold">Texto completo
+              <label className="block text-sm font-semibold">Escreva ou cole o Panorama completo
                 <textarea value={rawText} onChange={(e) => { setRawText(e.target.value); setDrafts([]); }} rows={13} className={field + " font-mono text-xs leading-relaxed"} placeholder={"Cole aqui o PANORAMA 360° completo...\n\n🇧🇷 BRASIL — ECONOMIA E POLÍTICA\n1. Título da notícia\nTexto...\nPOR QUE IMPORTA?\nImpacto..."} />
               </label>
               <div>
@@ -396,8 +377,8 @@ export default function PanoramaAdminPreview({ initialData }: { initialData?: Ed
                   <input type="date" value={importDate} onChange={(e) => setImportDate(e.target.value)} className={field} />
                 </label>
                 <p className="mt-4 rounded-xl bg-[#edf3f8] p-4 text-xs leading-relaxed text-[#5b7589]">Todas as notícias importadas recebem a data escolhida. Ela poderá ser editada individualmente antes da publicação.</p>
-                <button type="button" onClick={() => { setRawText(exampleText); setDrafts([]); }} className={secondary + " mt-4 w-full"}>Carregar exemplo</button>
-                <button type="button" disabled={!rawText.trim() || !importDate} onClick={analyzeImport} className={primary + " mt-3 w-full disabled:cursor-not-allowed disabled:opacity-40"}>Separar notícias →</button>
+                
+                <button type="button" disabled={!rawText.trim() || !importDate} onClick={analyzeImport} className={primary + " mt-3 w-full disabled:cursor-not-allowed disabled:opacity-40"}>Organizar notícias para revisão →</button>
               </div>
             </div>
           </section>

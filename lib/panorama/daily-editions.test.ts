@@ -44,6 +44,7 @@ test("categorias criadas pelo ADM aparecem automaticamente com seus próprios as
   const updated = [...categories, { id: "agro", name: "Agronegócio" }];
   assert.deepEqual(groupNewsByTopic([post("a", "agro")], "2026-11-05", updated).map((group) => group.name), ["Agronegócio"]);
   assert.equal(topicSymbol("Brasil"), "🇧🇷");
+  assert.equal(topicSymbol("Santa Catarina"), "SC");
   assert.equal(topicSymbol("Mundo"), "🌎");
   assert.equal(topicSymbol("Tecnologia"), "💻");
   assert.equal(topicSymbol("Nova categoria"), "📰");

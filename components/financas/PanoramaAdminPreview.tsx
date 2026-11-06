@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
+import MarketThermometerEditor from "@/components/financas/MarketThermometerEditor";
 import {
   formatEditorialDate,
   parsePanoramaText,
@@ -11,7 +12,7 @@ import {
   type EditorialState,
 } from "@/lib/panorama/editorial-client";
 
-type View = "visao" | "importar" | "publicacoes" | "categorias";
+type View = "visao" | "importar" | "publicacoes" | "categorias" | "termometro";
 type ImportDraft = EditorialPost & { selected: boolean };
 const overline = "text-[0.7rem] font-bold uppercase tracking-[0.15em]";
 const panel = "rounded-2xl border border-[#dfe6eb] bg-white shadow-[0_8px_24px_rgba(7,28,48,0.035)]";
@@ -144,9 +145,16 @@ export default function PanoramaAdminPreview({ initialData }: { initialData?: Ed
 
   function analyzeImport() {
     const output = parsePanoramaText(rawText, importDate, data.categories);
-    setDrafts(output.map((post) => ({ ...post, selected: true })));
+    const existing = new Set(data.posts.map((post) => post.publishedAt + "|" + post.title.trim().toLocaleLowerCase("pt-BR")));
+    const duplicateCount = output.filter((post) => existing.has(post.publishedAt + "|" + post.title.trim().toLocaleLowerCase("pt-BR"))).length;
+    setDrafts(output.map((post) => ({
+      ...post,
+      selected: !existing.has(post.publishedAt + "|" + post.title.trim().toLocaleLowerCase("pt-BR")),
+    })));
     setNotice(output.length
-      ? output.length + " notícia(s) identificada(s). Confira títulos, textos, categorias e fatos antes de salvar."
+      ? output.length + " notícia(s) identificada(s). " + (duplicateCount
+        ? duplicateCount + " já cadastrada(s) nesta data foram desmarcadas para evitar duplicação. "
+        : "") + "Revise antes de salvar."
       : "Não encontrei notícias numeradas. Use títulos como '1. Título da notícia', separados por linhas.");
   }
 
@@ -269,6 +277,7 @@ export default function PanoramaAdminPreview({ initialData }: { initialData?: Ed
           ["importar", "Importar notícias em lote"],
           ["publicacoes", "Publicações"],
           ["categorias", "Categorias"],
+          ["termometro", "Termômetro econômico"],
         ] as const).map(([id, label]) => (
           <button key={id} type="button" onClick={() => goTo(id)}
             className={"shrink-0 rounded-xl px-4 py-3 text-sm font-semibold transition " + (view === id ? "bg-[#092b49] text-white" : "bg-white text-[#526b80] hover:bg-[#edf3f7]")}>{label}</button>
@@ -276,6 +285,8 @@ export default function PanoramaAdminPreview({ initialData }: { initialData?: Ed
       </div>
 
       {notice ? <p role="status" className="rounded-xl border border-[#cfe2d7] bg-[#f0f8f3] p-4 text-sm font-semibold text-[#2e6f4b]">{notice}</p> : null}
+
+      {view === "termometro" ? <MarketThermometerEditor /> : null}
 
       {view === "visao" ? (
         <>

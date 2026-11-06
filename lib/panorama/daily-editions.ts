@@ -102,7 +102,7 @@ export function shortEditionDate(day: string): { weekday: string; day: string; m
 export function uniqueTopicSources<T extends { source: string }>(posts: readonly T[]): string[] {
   const sources = new Map<string, string>();
   for (const post of posts) {
-    const clean = post.source.trim().replace(/\\s+/g, " ");
+    const clean = post.source.trim().replace(/\s+/g, " ");
     if (clean && !sources.has(clean.toLocaleLowerCase("pt-BR"))) {
       sources.set(clean.toLocaleLowerCase("pt-BR"), clean);
     }

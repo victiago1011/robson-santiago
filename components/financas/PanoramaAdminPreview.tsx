@@ -381,7 +381,7 @@ export default function PanoramaAdminPreview({ initialData, initialEditions = []
 
       {notice ? <p role={noticeIsError ? "alert" : "status"} className={"rounded-xl border p-4 text-sm font-semibold " + (noticeIsError ? "border-[#e8c7c0] bg-[#fff2ef] text-[#913d31]" : "border-[#cfe2d7] bg-[#f0f8f3] text-[#2e6f4b]")}>{notice}</p> : null}
 
-      {view === "termometro" ? <MarketThermometerEditor /> : null}
+      {view === "termometro" ? <MarketThermometerEditor dates={[...new Set([...data.posts.map((post) => post.publishedAt), ...editions.map((edition) => edition.published_on)])].sort((a, b) => b.localeCompare(a))} /> : null}
 
       {view === "visao" ? (
         <>

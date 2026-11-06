@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { marketDate, marketMovement, publishedMarketIndicators, MARKET_SLUGS, type MarketIndicator } from "./market";
+import { indicatorsForEdition, marketDate, marketMovement, publishedMarketIndicators, MARKET_SLUGS, type MarketIndicator } from "./market";
 
 function example(slug: MarketIndicator["slug"], values: Partial<MarketIndicator> = {}): MarketIndicator {
   return { slug, label: slug, display_order: MARKET_SLUGS.indexOf(slug)+1, display_value: "123",
@@ -22,4 +22,15 @@ test("arrows show direction, not investment recommendation", () => {
   assert.equal(marketMovement("flat").symbol, "—");
   assert.equal(marketMovement("flat").label, "Neutro");
   assert.equal(marketDate("2026-11-04"), "04/11/2026");
+});
+
+test("clicar em outra data altera o termômetro e nunca usa cotação de outro dia", () => {
+  const snapshots = [
+    { ...example("ibovespa", { display_value: "166.191" }), edition_on: "2026-11-05" },
+    { ...example("ibovespa", { display_value: "168.003" }), edition_on: "2026-11-06" },
+    { ...example("dolar", { display_value: "R$ 5,42" }), edition_on: "2026-11-06" },
+  ];
+  assert.deepEqual(indicatorsForEdition(snapshots, "2026-11-05").map((item) => item.display_value), ["166.191"]);
+  assert.deepEqual(indicatorsForEdition(snapshots, "2026-11-06").map((item) => item.display_value), ["168.003", "R$ 5,42"]);
+  assert.deepEqual(indicatorsForEdition(snapshots, "2026-11-04"), []);
 });

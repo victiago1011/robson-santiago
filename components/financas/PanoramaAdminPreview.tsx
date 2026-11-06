@@ -164,7 +164,7 @@ export default function PanoramaAdminPreview({ initialData, initialEditions = []
     const extracted = parseCompleteEdition(rawText, importDate, data.categories);
     const output = extracted.posts;
     setPendingSections({
-      published_on: importDate, agenda_items: extracted.agenda,
+      published_on: importDate, agenda_items: extracted.agenda, historical_events: [],
       commentary_title: extracted.commentaryTitle, commentary_body: extracted.commentaryBody, status: "draft",
     });
     const existing = new Set(data.posts.map((post) => post.publishedAt + "|" + post.title.trim().toLocaleLowerCase("pt-BR")));
@@ -207,7 +207,7 @@ export default function PanoramaAdminPreview({ initialData, initialEditions = []
       try {
         await saveEditionSections(pendingSections);
       } catch (cause) {
-        setNotice("Notícias salvas, mas a agenda/análise não: " + (cause instanceof Error ? cause.message : "revise mais tarde."));
+        setNotice("Notícias salvas, mas os complementos editoriais não: " + (cause instanceof Error ? cause.message : "revise mais tarde."));
         setReviewDate(importDate); setView("publicacoes");
         return;
       }
@@ -225,6 +225,7 @@ export default function PanoramaAdminPreview({ initialData, initialEditions = []
       method: "PUT", credentials: "same-origin", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         published_on: payload.published_on, agenda_items: payload.agenda_items.filter((item) => item.text.trim()),
+        historical_events: payload.historical_events,
         commentary_title: payload.commentary_title, commentary_body: payload.commentary_body,
       }),
     });
@@ -380,7 +381,7 @@ export default function PanoramaAdminPreview({ initialData, initialEditions = []
 
       {notice ? <p role={noticeIsError ? "alert" : "status"} className={"rounded-xl border p-4 text-sm font-semibold " + (noticeIsError ? "border-[#e8c7c0] bg-[#fff2ef] text-[#913d31]" : "border-[#cfe2d7] bg-[#f0f8f3] text-[#2e6f4b]")}>{notice}</p> : null}
 
-      {view === "termometro" ? <MarketThermometerEditor /> : null}
+      {view === "termometro" ? <MarketThermometerEditor dates={[...new Set([...data.posts.map((post) => post.publishedAt), ...editions.map((edition) => edition.published_on)])].sort((a, b) => b.localeCompare(a))} /> : null}
 
       {view === "visao" ? (
         <>
@@ -451,7 +452,7 @@ export default function PanoramaAdminPreview({ initialData, initialEditions = []
 
           {pendingSections && editionHasContent(pendingSections) ? (
             <div className="rounded-2xl border border-[#d8dfeb] bg-[#f0f6fb] p-5 text-sm leading-relaxed text-[#295574]">
-              <strong>Complementos identificados:</strong> {pendingSections.agenda_items.length} itens da Agenda do Investidor
+              <strong>Seções especiais identificadas:</strong> {pendingSections.agenda_items.length} itens da antiga Agenda do Investidor serão preservados no registro da edição, mas não aparecerão como marcos históricos.
               {pendingSections.commentary_body ? " e A Visão do Comentarista (" + pendingSections.commentary_title + ")." : "."}
               Serão salvos como rascunho junto das notícias e poderão ser editados na revisão.
             </div>

@@ -1,34 +1,38 @@
 import type { EditionExtras } from "@/lib/panorama/edition-extras";
-import { formattedAgendaDay } from "@/lib/panorama/edition-extras";
+
 
 const overline = "text-[0.69rem] font-extrabold uppercase tracking-[0.15em]";
 
 export default function EditionExtrasPublic({ edition }: { edition?: EditionExtras }) {
   if (!edition || edition.status !== "published") return null;
-  const agenda = edition.agenda_items.filter((item) => item.text.trim());
+  const historical = edition.historical_events.filter((item) => item.title.trim());
   const commentary = edition.commentary_body.trim();
-  if (!agenda.length && !commentary) return null;
+  if (!historical.length && !commentary) return null;
 
   return (
     <div className="mt-12 space-y-9">
-      {agenda.length > 0 ? (
-        <section aria-labelledby="agenda-investidor" className="overflow-hidden rounded-2xl border border-[#d7e2eb] bg-white shadow-[0_12px_36px_rgba(11,36,60,0.035)]">
+      {historical.length > 0 ? (
+        <section id="marcos-historicos" aria-labelledby="historical-title"
+          className="scroll-mt-8 overflow-hidden rounded-2xl border border-[#d7e2eb] bg-white shadow-[0_12px_36px_rgba(11,36,60,0.035)]">
           <header className="border-b border-[#dce5ed] bg-[#eef4f8] px-6 py-6 md:px-9">
-            <p className={overline + " text-[#a9803d]"}>Olho no calendário</p>
-            <h2 id="agenda-investidor" className="mt-2 text-2xl font-extrabold tracking-tight text-[#143551] md:text-3xl">🗓️ Agenda do Investidor</h2>
+            <p className={overline + " text-[#a9803d]"}>Uma viagem no tempo</p>
+            <h2 id="historical-title" className="mt-2 text-2xl font-extrabold tracking-tight text-[#143551] md:text-3xl">
+              📜 Marcos Históricos desta Data
+            </h2>
             <p className="mt-2 text-sm leading-relaxed text-[#657c90]">
-              Acontecimentos e decisões para acompanhar. Itens sem data confirmada são apresentados como pontos de atenção, não compromissos agendados.
+              Fatos selecionados de outros anos que aconteceram neste mesmo dia e mês.
             </p>
           </header>
-          <ol className="grid gap-3 p-5 md:grid-cols-2 md:p-8">
-            {agenda.map((item, i) => (
-              <li key={i} className="flex gap-4 rounded-xl border border-[#dfe7ed] bg-[#f9fbfd] p-4">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#e1ebf3] text-sm font-extrabold text-[#365d77]">{i + 1}</span>
+          <ol className="relative space-y-3 p-5 md:p-8">
+            {historical.map((item,i) => (
+              <li key={i} className="flex gap-4 rounded-xl border border-[#dfe7ed] bg-[#f9fbfd] p-5">
+                <span className="inline-flex h-11 min-w-16 shrink-0 items-center justify-center rounded-xl bg-[#0d3553] px-2 text-sm font-black text-[#e9c47b]">
+                  {item.year}
+                </span>
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold leading-relaxed text-[#24435b]">{item.text}</p>
-                  <p className="mt-2 text-xs font-semibold text-[#a37b3d]">
-                    {item.on ? <time dateTime={item.on}>📅 {formattedAgendaDay(item.on)}</time> : "Em acompanhamento • Data não informada"}
-                  </p>
+                  <h3 className="text-base font-bold leading-snug text-[#153a57]">{item.title}</h3>
+                  {item.description ? <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-[#4a687c]">{item.description}</p> : null}
+                  {item.source ? <p className="mt-3 break-words text-xs text-[#72879a]">Fonte: {item.source}</p> : null}
                 </div>
               </li>
             ))}

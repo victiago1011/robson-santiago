@@ -32,3 +32,11 @@ export function marketDate(date: string) {
   const [year, month, day] = date.split("-");
   return day + "/" + month + "/" + year;
 }
+
+/** Never backfill a day from the latest quote. A missing snapshot is empty. */
+export function indicatorsForEdition<T extends MarketIndicator & { edition_on: string }>(
+  snapshots: readonly T[],
+  editionOn: string,
+): T[] {
+  return snapshots.filter((item) => item.edition_on === editionOn);
+}

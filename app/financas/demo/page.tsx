@@ -3,6 +3,7 @@ import Link from "next/link";
 import PanoramaPortal from "@/components/financas/PanoramaPortal";
 import type { EditorialPost, EditorialState } from "@/lib/panorama/editorial-client";
 import type { EditionExtras } from "@/lib/panorama/edition-extras";
+import type { MarketSnapshot } from "@/lib/panorama/market-store";
 
 export const metadata: Metadata = {
   title: "Prévia da organização por assuntos — Panorama 360°",
@@ -51,8 +52,20 @@ const posts: EditorialPost[] = examples.map(([categoryId, title, summary, publis
 }));
 
 const previewData: EditorialState = { categories, posts };
+const previewSnapshots: MarketSnapshot[] = [
+  { edition_on: "2026-11-05", slug: "ibovespa", label: "Ibovespa", display_value: "100 mil (demo)", variation: "1% (demo)", direction: "up", reference_on: "2026-11-05", visible: true, display_order: 1 },
+  { edition_on: "2026-11-05", slug: "dolar", label: "Dólar", display_value: "R$ 5,00 (demo)", variation: "0,5% (demo)", direction: "down", reference_on: "2026-11-05", visible: true, display_order: 2 },
+  { edition_on: "2026-11-04", slug: "ibovespa", label: "Ibovespa", display_value: "98 mil (demo)", variation: "0,8% (demo)", direction: "down", reference_on: "2026-11-04", visible: true, display_order: 1 },
+  { edition_on: "2026-11-04", slug: "dolar", label: "Dólar", display_value: "R$ 4,90 (demo)", variation: "0,2% (demo)", direction: "up", reference_on: "2026-11-04", visible: true, display_order: 2 },
+];
+
+
 const previewEditional: EditionExtras[] = [{
   published_on: "2026-11-05",
+  historical_events: [
+    { year: "1900", title: "Marco histórico fictício da demonstração", description: "Este é um exemplo visual, não um acontecimento histórico real.", source: "Conteúdo ilustrativo" },
+    { year: "2000", title: "Segundo exemplo de uma efeméride", description: "O administrador cadastrará fatos reais e verificados para cada edição.", source: "Conteúdo ilustrativo" },
+  ],
   agenda_items: [
     { text: "Acompanhar o próximo comunicado de política monetária", on: null },
     { text: "Observar os próximos resultados financeiros de empresas de tecnologia", on: null },
@@ -74,7 +87,7 @@ export default function PanoramaGroupedDemoPage() {
           Ir para o Panorama oficial ↗
         </Link>
       </div>
-      <PanoramaPortal initialData={previewData} initialEditions={previewEditional} />
+      <PanoramaPortal initialData={previewData} initialSnapshots={previewSnapshots} initialEditions={previewEditional} />
     </>
   );
 }

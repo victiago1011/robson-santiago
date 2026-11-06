@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import PanoramaPortal from "@/components/financas/PanoramaPortal";
 import { readPanoramaData } from "@/lib/panorama/store";
-import { readMarketIndicators } from "@/lib/panorama/market-store";
-import type { MarketIndicator } from "@/lib/panorama/market";
+import { readMarketSnapshots, type MarketSnapshot } from "@/lib/panorama/market-store";
 import { readEditionExtras } from "@/lib/panorama/edition-store";
 import type { EditionExtras } from "@/lib/panorama/edition-extras";
 import type { EditorialState } from "@/lib/panorama/editorial-client";
@@ -45,11 +44,11 @@ export const metadata: Metadata = {
 
 export default async function FinancasPage() {
   let initialData: EditorialState | undefined;
-  let indicators: MarketIndicator[] = [];
+  let snapshots: MarketSnapshot[] = [];
   let editions: EditionExtras[] = [];
   try {
-    const [result, market, publishedEditions] = await Promise.all([readPanoramaData(false), readMarketIndicators(false), readEditionExtras(false)]);
-    indicators = market;
+    const [result, marketSnapshots, publishedEditions] = await Promise.all([readPanoramaData(false), readMarketSnapshots(false), readEditionExtras(false)]);
+    snapshots = marketSnapshots;
     editions = publishedEditions;
     initialData = {
       categories: result.categories,
@@ -70,5 +69,5 @@ export default async function FinancasPage() {
   } catch {
     // The client shows an error and supports retry if the database is offline.
   }
-  return <PanoramaPortal initialData={initialData} initialIndicators={indicators} initialEditions={editions} />;
+  return <PanoramaPortal initialData={initialData} initialSnapshots={snapshots} initialEditions={editions} />;
 }

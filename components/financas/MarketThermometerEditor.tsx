@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import MarketIndicatorIcon from "@/components/financas/MarketIndicatorIcon";
 import {
   MARKET_SLUGS,
   marketDate,
@@ -82,7 +83,7 @@ export default function MarketThermometerEditor() {
         <p className="text-[0.7rem] font-bold uppercase tracking-[0.15em] text-[#b1833e]">Edição manual · Sem cotações automáticas</p>
         <h2 className="mt-2 text-2xl font-extrabold text-[#132f49] md:text-3xl">Termômetro econômico</h2>
         <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[#5e7588]">
-          Preencha os números, a variação e selecione ↑ alta, ↓ queda ou — estabilidade.
+          Preencha os números, a variação e selecione ↑ alta, ↓ queda ou — neutro.
           A seta indica apenas o movimento — não se é uma notícia boa ou ruim.
           Para publicar um card, marque <strong>Exibir no site</strong> e informe a data de referência.
         </p>
@@ -94,9 +95,12 @@ export default function MarketThermometerEditor() {
           return (
             <div key={item.slug} className="rounded-2xl border border-[#dce5ed] bg-white p-5 md:p-6">
               <div className="mb-5 flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.1em] text-[#718699]">Indicador</p>
-                  <h3 className="mt-1 text-xl font-extrabold text-[#102f4b]">{item.label}</h3>
+                <div className="flex min-w-0 items-center gap-3">
+                  <MarketIndicatorIcon slug={item.slug} size="md" />
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[0.1em] text-[#718699]">Indicador</p>
+                    <h3 className="mt-1 text-xl font-extrabold text-[#102f4b]">{item.label}</h3>
+                  </div>
                 </div>
                 <label className="flex items-center gap-2 text-xs font-bold text-[#31546e]">
                   <input type="checkbox" checked={item.visible} onChange={(e) => update(item.slug, { visible: e.target.checked })}
@@ -116,7 +120,7 @@ export default function MarketThermometerEditor() {
                 <label className="text-xs font-bold text-[#4d6479]">Direção da seta
                   <select value={item.direction} onChange={(e) => update(item.slug, { direction: e.target.value as MarketIndicator["direction"] })}
                     className={field}>
-                    <option value="up">▲ Alta</option><option value="down">▼ Queda</option><option value="flat">— Estável / sem variação</option>
+                    <option value="up">▲ Alta</option><option value="down">▼ Queda</option><option value="flat">— Neutro / sem indicação</option>
                   </select>
                 </label>
                 <label className="text-xs font-bold text-[#4d6479]">Data de referência
@@ -128,8 +132,10 @@ export default function MarketThermometerEditor() {
                 <p className="text-[0.65rem] font-bold uppercase tracking-[0.12em] text-[#708699]">Prévia do card</p>
                 <div className="mt-2 flex flex-wrap items-baseline gap-3">
                   <strong className="text-xl text-[#13324a]">{item.display_value || "Valor não informado"}</strong>
-                  <span className={"text-sm font-bold " + movement.color}>
-                    {movement.symbol} {item.variation || movement.label}
+                  <span className={"text-sm font-bold " + movement.color}
+                    aria-label={item.direction === "flat" ? "Variação neutra ou não informada" : movement.label + (item.variation ? ": " + item.variation : "")}>
+                    <span aria-hidden="true">{movement.symbol}</span>
+                    {item.direction !== "flat" && item.variation.trim() ? " " + item.variation : null}
                   </span>
                 </div>
                 <p className="mt-1 text-xs text-[#70849a]">

@@ -5,7 +5,7 @@ import Link from "next/link";
 import MarketThermometerEditor from "@/components/financas/MarketThermometerEditor";
 import EditionExtrasEditor from "@/components/financas/EditionExtrasEditor";
 import { parseCompleteEdition } from "@/lib/panorama/complete-edition-parser";
-import { editionHasContent, emptyEditionExtras, type EditionExtras } from "@/lib/panorama/edition-extras";
+import { editionHasContent, type EditionExtras } from "@/lib/panorama/edition-extras";
 import {
   formatEditorialDate,
   uniqueCategoryName,
@@ -557,7 +557,7 @@ export default function PanoramaAdminPreview({ initialData, initialEditions = []
               </div>
 
               <EditionExtrasEditor key={reviewDate} day={reviewDate}
-                saved={editions.find((item) => item.published_on === reviewDate) || emptyEditionExtras(reviewDate)}
+                saved={editions.find((item) => item.published_on === reviewDate)}
                 onSaved={(item) => setEditions((current) => [...current.filter((value) => value.published_on !== item.published_on), item])} />
               <div className="mt-7 rounded-xl border border-[#d6e2eb] bg-[#f3f8fb] p-5">
                 <p className="text-sm leading-relaxed text-[#416278]">

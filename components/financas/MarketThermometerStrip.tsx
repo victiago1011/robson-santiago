@@ -1,4 +1,5 @@
 import { marketDate, marketMovement, publishedMarketIndicators, type MarketIndicator } from "@/lib/panorama/market";
+import MarketIndicatorIcon from "@/components/financas/MarketIndicatorIcon";
 
 export default function MarketThermometerStrip({ indicators }: { indicators: readonly MarketIndicator[] }) {
   const visible = publishedMarketIndicators(indicators);
@@ -18,10 +19,15 @@ export default function MarketThermometerStrip({ indicators }: { indicators: rea
               const movement = marketMovement(item.direction);
               return (
                 <article key={item.slug} className="min-w-[156px] shrink-0 snap-start rounded-xl border border-[#e1e8ee] bg-[#f8fafc] p-4 md:min-w-0">
-                  <h3 className="text-[0.66rem] font-bold uppercase tracking-[0.07em] text-[#637b90]">{item.label}</h3>
-                  <p className="mt-2 text-lg font-extrabold tracking-tight text-[#12344f]">{item.display_value}</p>
-                  <p className={"mt-2 text-xs font-bold " + movement.color} aria-label={movement.label}>
-                    <span aria-hidden="true">{movement.symbol}</span> {item.variation || movement.label}
+                  <div className="flex min-h-9 items-center gap-2.5">
+                    <MarketIndicatorIcon slug={item.slug} />
+                    <h3 className="min-w-0 text-[0.66rem] font-bold uppercase leading-tight tracking-[0.04em] text-[#637b90]">{item.label}</h3>
+                  </div>
+                  <p className="mt-2 break-words text-base font-extrabold tracking-tight text-[#12344f] xl:text-lg">{item.display_value}</p>
+                  <p className={"mt-2 text-xs font-bold " + movement.color}
+                    aria-label={item.direction === "flat" ? "Variação neutra ou não informada" : movement.label + (item.variation ? ": " + item.variation : "")}>
+                    <span aria-hidden="true">{movement.symbol}</span>
+                    {item.direction !== "flat" && item.variation.trim() ? " " + item.variation : null}
                   </p>
                   <p className="mt-2 text-[0.63rem] text-[#6a8195]">
                     Ref. <time dateTime={item.reference_on ?? undefined}>{item.reference_on ? marketDate(item.reference_on) : ""}</time>

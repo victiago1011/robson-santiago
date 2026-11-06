@@ -61,11 +61,12 @@ function newPost(categoryId: string): EditorialPost {
 }
 
 function FormFields({
-  value, onChange, categories,
+  value, onChange, categories, showStatus = true,
 }: {
   value: EditorialPost;
   onChange: (value: EditorialPost) => void;
   categories: { id: string; name: string }[];
+  showStatus?: boolean;
 }) {
   const update = (patch: Partial<EditorialPost>) => onChange({ ...value, ...patch });
   return (
@@ -105,12 +106,14 @@ function FormFields({
           </span>
         </span>
       </label>
-      <label className="block text-sm font-semibold">Status
+      {showStatus ? <label className="block text-sm font-semibold">Status
         <select className={field} value={value.status} onChange={(e) => update({ status: e.target.value as EditorialPost["status"] })}>
           <option value="Rascunho">Rascunho</option>
           <option value="Publicado">Publicado (visível no site)</option>
         </select>
-      </label>
+      </label> : <p className="rounded-lg border border-[#ead6a9] bg-[#fff8e6] px-4 py-3 text-sm text-[#6f572a]">
+        Importações são salvas apenas como <strong>rascunho</strong>. A publicação acontecerá depois, na revisão da edição.
+      </p>}
     </div>
   );
 }
@@ -128,10 +131,16 @@ export default function PanoramaAdminPreview({ initialData }: { initialData?: Ed
   const [renamingValue, setRenamingValue] = useState("");
   const [postQuery, setPostQuery] = useState("");
   const [postStatus, setPostStatus] = useState("Todos");
+  const [reviewDate, setReviewDate] = useState<string | null>(null);
+  const [publishing, setPublishing] = useState(false);
 
   const published = data.posts.filter((post) => post.status === "Publicado").length;
   const draftCount = data.posts.length - published;
   const recentPosts = [...data.posts].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt)).slice(0, 5);
+  const draftDays = useMemo(() => [...new Set(data.posts.filter((post) => post.status === "Rascunho").map((post) => post.publishedAt))]
+    .sort((a, b) => b.localeCompare(a)), [data.posts]);
+  const editionPosts = useMemo(() => data.posts.filter((post) => post.publishedAt === reviewDate)
+    .sort((a, b) => a.title.localeCompare(b.title, "pt-BR")), [data.posts, reviewDate]);
   const shownPosts = useMemo(() => data.posts.filter((post) => (
     (postStatus === "Todos" || post.status === postStatus)
     && [post.title, post.summary].some((part) => part.toLocaleLowerCase("pt-BR").includes(postQuery.trim().toLocaleLowerCase("pt-BR")))
@@ -141,6 +150,7 @@ export default function PanoramaAdminPreview({ initialData }: { initialData?: Ed
     setView(next);
     setNotice("");
     setEditing(null);
+    setReviewDate(null);
   }
 
   function analyzeImport() {
@@ -173,18 +183,54 @@ export default function PanoramaAdminPreview({ initialData }: { initialData?: Ed
     }
   }
 
-  async function commitImport(status: EditorialPost["status"]) {
+  async function commitImport() {
     const chosen = drafts.filter((draft) => draft.selected && !draft.duplicate && draft.title.trim() && draft.content.trim());
     if (!chosen.length) {
       setNotice("Selecione ao menos uma notícia com título e texto para continuar.");
       return;
     }
-    const posts = chosen.map(({ selected: _selected, duplicate: _duplicate, ...post }) => ({ ...post, status }));
+    const posts = chosen.map(({ selected: _selected, duplicate: _duplicate, ...post }) => ({ ...post, status: "Rascunho" as const }));
     if (!await persist({ ...data, posts: [...posts, ...data.posts] })) return;
     setDrafts([]);
     setRawText("");
-    setNotice(posts.length + (status === "Publicado" ? " notícia(s) publicada(s)." : " rascunho(s) salvo(s)."));
+    setNotice(posts.length + " rascunho(s) salvo(s). Revise a edição completa antes de publicar.");
+    setReviewDate(importDate);
     setView("publicacoes");
+  }
+
+  async function publishEdition() {
+    if (!reviewDate || publishing) return;
+    const count = editionPosts.filter((post) => post.status === "Rascunho").length;
+    if (!count) {
+      setNotice("Não há rascunhos para publicar nesta edição.");
+      return;
+    }
+    if (!window.confirm(
+      "Publicar " + count + " notícia(s) da edição de " + formatEditorialDate(reviewDate)
+      + " no site público? Confirme que revisou conteúdo, categorias e fontes.",
+    )) return;
+    setPublishing(true);
+    setNotice("");
+    try {
+      const response = await fetch("/api/admin/panorama", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "edition:publish", date: reviewDate }),
+      });
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({})) as { error?: string };
+        throw new Error(result.error || "Falha ao publicar a edição.");
+      }
+      const result = await response.json() as { published: number };
+      await reload();
+      setNotice(result.published + " notícia(s) publicadas em " + formatEditorialDate(reviewDate) + ".");
+      setReviewDate(null);
+    } catch (cause) {
+      setNotice(cause instanceof Error ? cause.message : "Não foi possível publicar a edição.");
+    } finally {
+      setPublishing(false);
+    }
   }
 
   async function savePost(event: FormEvent<HTMLFormElement>) {
@@ -275,7 +321,7 @@ export default function PanoramaAdminPreview({ initialData }: { initialData?: Ed
       <div className="flex gap-2 overflow-x-auto border-b border-[#d7e1e8] pb-3" aria-label="Áreas do painel editorial">
         {([
           ["visao", "Visão geral"],
-          ["importar", "Importar notícias em lote"],
+          ["importar", "Colar edição completa"],
           ["publicacoes", "Publicações"],
           ["categorias", "Categorias"],
           ["termometro", "Termômetro econômico"],
@@ -326,8 +372,8 @@ export default function PanoramaAdminPreview({ initialData }: { initialData?: Ed
             <aside className={panel + " p-6"}>
               <p className={overline + " text-[#a17a3e]"}>Publicar sem complicação</p>
               <h2 className="mt-3 text-2xl font-extrabold leading-tight">Um Panorama inteiro, de uma só vez.</h2>
-              <p className="mt-3 text-sm leading-relaxed text-[#667d90]">Cole o texto da edição. O importador identifica matérias numeradas e separa o bloco “Por que importa?”. Você revisa e escolhe o que publicar.</p>
-              <button type="button" onClick={() => goTo("importar")} className={primary + " mt-6 w-full"}>Importar texto completo →</button>
+              <p className="mt-3 text-sm leading-relaxed text-[#667d90]">Cole o texto da edição. O importador identifica matérias numeradas e separa o bloco “Por que importa?”. As notícias ficam em rascunho até a aprovação da edição.</p>
+              <button type="button" onClick={() => goTo("importar")} className={primary + " mt-6 w-full"}>Escrever ou colar edição completa →</button>
               <button type="button" onClick={() => { goTo("publicacoes"); setEditing(newPost(data.categories[0]?.id || "")); }} className={secondary + " mt-3 w-full"}>Escrever notícia avulsa</button>
               <button type="button" onClick={() => goTo("categorias")} className="mt-5 w-full text-center text-sm font-bold text-[#1d628f] hover:underline">Gerenciar categorias →</button>
             </aside>
@@ -339,34 +385,14 @@ export default function PanoramaAdminPreview({ initialData }: { initialData?: Ed
         <div className="space-y-6">
           <section className={panel + " p-5 md:p-7"}>
             <p className={overline + " text-[#a47c39]"}>Publicação em lote</p>
-            <h2 className="mt-2 text-2xl font-extrabold">Importe a edição completa do Panorama</h2>
-            <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[#667b8e]">Cole o texto ou selecione um arquivo .txt. O importador reconhece matérias que começam por “1. Título”, “2. Título” e assim por diante, além de seções como Brasil, Mundo e “Por que importa?”. Não é necessário preencher um formulário por notícia.</p>
+            <h2 className="mt-2 text-2xl font-extrabold">Escreva ou cole a edição completa</h2>
+            <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[#667b8e]">Escreva ou cole o texto do Panorama neste campo. O sistema reconhece matérias que começam por “1. Título”, “2. Título” e assim por diante, além de seções como Brasil, Mundo e “Por que importa?”. Não é necessário preencher um formulário por notícia.</p>
             <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
               <label className="block text-sm font-semibold">Texto completo
                 <textarea value={rawText} onChange={(e) => { setRawText(e.target.value); setDrafts([]); }} rows={13} className={field + " font-mono text-xs leading-relaxed"} placeholder={"Cole aqui o PANORAMA 360° completo...\n\n🇧🇷 BRASIL — ECONOMIA E POLÍTICA\n1. Título da notícia\nTexto...\nPOR QUE IMPORTA?\nImpacto..."} />
               </label>
               <div>
-                <label className="block text-sm font-semibold">Ou selecione um arquivo .txt
-                  <input type="file" accept=".txt,text/plain" className={field}
-                    onChange={async (event) => {
-                      const file = event.target.files?.[0];
-                      if (!file) return;
-                      event.target.value = "";
-                      if (!file.name.toLowerCase().endsWith(".txt") || file.size > 256_000) {
-                        setNotice("Selecione um arquivo .txt de até 256 KB.");
-                        return;
-                      }
-                      try {
-                        const text = await file.text();
-                        setRawText(text);
-                        setDrafts([]);
-                        setNotice("Arquivo " + file.name + " carregado. Confira a data antes de separar as notícias.");
-                      } catch {
-                        setNotice("Não foi possível ler o arquivo selecionado.");
-                      }
-                    }} />
-                </label>
-                <label className="mt-4 block text-sm font-semibold">Data das notícias
+                <label className="mt-4 block text-sm font-semibold">Data da edição
                   <input type="date" value={importDate} onChange={(e) => setImportDate(e.target.value)} className={field} />
                 </label>
                 <p className="mt-4 rounded-xl bg-[#edf3f8] p-4 text-xs leading-relaxed text-[#5b7589]">Todas as notícias importadas recebem a data escolhida. Ela poderá ser editada individualmente antes da publicação.</p>
@@ -398,7 +424,7 @@ export default function PanoramaAdminPreview({ initialData }: { initialData?: Ed
                       <details className="min-w-0 flex-1">
                         <summary className="cursor-pointer text-sm font-bold leading-relaxed">{String(index + 1).padStart(2, "0")} • {draft.title} <span className="ml-2 text-xs font-normal text-[#7690a3]">{draft.duplicate ? "(já cadastrada — não será importada novamente)" : "(abrir e revisar)"}</span></summary>
                         <div className="mt-5 border-t border-[#e2e9ef] pt-5">
-                          <FormFields value={draft} categories={data.categories} onChange={(next) => updateDraft(draft.id, next)} />
+                          <FormFields value={draft} categories={data.categories} onChange={(next) => updateDraft(draft.id, next)} showStatus={false} />
                         </div>
                       </details>
                     </div>
@@ -406,10 +432,9 @@ export default function PanoramaAdminPreview({ initialData }: { initialData?: Ed
                 ))}
               </div>
               <div className="mt-6 flex flex-wrap gap-3 border-t border-[#e6edf2] pt-5">
-                <button type="button" onClick={() => commitImport("Rascunho")} disabled={!selectedCount || busy} className={secondary + " disabled:opacity-40"}>Salvar selecionadas como rascunho</button>
-                <button type="button" onClick={() => commitImport("Publicado")} disabled={!selectedCount || busy} className={primary + " disabled:opacity-40"}>Publicar selecionadas →</button>
+                <button type="button" onClick={() => void commitImport()} disabled={!selectedCount || busy} className={primary + " disabled:opacity-40"}>Salvar {selectedCount} como rascunho e revisar →</button>
               </div>
-              <p className="mt-4 text-xs leading-relaxed text-[#72869a]">A separação é automática, mas a conferência dos fatos, fontes e categorias deve ser feita pelo administrador. A publicação requer revisão manual de cada notícia e de suas fontes.</p>
+              <p className="mt-4 text-xs leading-relaxed text-[#72869a]">A separação é automática, mas nenhuma notícia é publicada nesta etapa. Salve os rascunhos, revise a edição em Publicações e só então confirme a publicação.</p>
             </section>
           ) : null}
         </div>

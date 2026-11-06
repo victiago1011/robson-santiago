@@ -34,6 +34,7 @@ function newPost(categoryId: string): EditorialPost {
     summary: "",
     content: "",
     impact: "",
+    showImpact: false,
     publishedAt: todayInBrazil(),
     status: "Rascunho",
     featured: false,
@@ -71,9 +72,25 @@ function FormFields({
       <label className="block text-sm font-semibold">Texto completo
         <textarea required className={field} rows={6} value={value.content} onChange={(e) => update({ content: e.target.value })} placeholder="Escreva a análise, com parágrafos separados por uma linha..." />
       </label>
-      <label className="block text-sm font-semibold">Por que importa?
-        <textarea className={field} rows={3} value={value.impact} onChange={(e) => update({ impact: e.target.value })} placeholder="Qual o impacto desta notícia para o leitor?" />
-      </label>
+      <div className="rounded-xl border border-[#d9e5ed] bg-[#f3f7fa] p-4">
+        <label className="flex cursor-pointer items-center gap-3 text-sm font-semibold text-[#19364d]">
+          <input type="checkbox" checked={value.showImpact}
+            onChange={(e) => update({ showImpact: e.target.checked })}
+            className="h-4 w-4 shrink-0 accent-[#0b2a45]" />
+          Exibir “Por que importa?” nesta notícia
+        </label>
+        <p className="mt-2 text-xs leading-relaxed text-[#657b8c]">
+          Opcional para notícias curtas. Desmarcar oculta o bloco no portal, mas preserva o texto já escrito.
+        </p>
+        {value.showImpact ? (
+          <label className="mt-4 block text-sm font-semibold">
+            Texto do “Por que importa?”
+            <textarea className={field} rows={3} value={value.impact}
+              onChange={(e) => update({ impact: e.target.value })}
+              placeholder="Explique por que este assunto importa para o leitor." />
+          </label>
+        ) : null}
+      </div>
       <label className="block text-sm font-semibold">Fonte ou referência
         <input className={field} value={value.source} onChange={(e) => update({ source: e.target.value })} placeholder="Link ou identificação da fonte" />
       </label>
@@ -468,7 +485,7 @@ export default function PanoramaAdminPreview({ initialData }: { initialData?: Ed
                             <div className="mt-4 space-y-4 border-t border-[#e5ecf1] pt-4 text-sm leading-relaxed text-[#37566d]">
                               {post.summary ? <p className="font-semibold">{post.summary}</p> : null}
                               <p className="whitespace-pre-wrap">{post.content}</p>
-                              {post.impact ? <div className="rounded-lg border-l-4 border-[#d6a751] bg-[#f3f7fa] p-4">
+                              {post.showImpact && post.impact ? <div className="rounded-lg border-l-4 border-[#d6a751] bg-[#f3f7fa] p-4">
                                 <p className="font-bold">Por que importa?</p>
                                 <p className="mt-2 whitespace-pre-wrap">{post.impact}</p>
                               </div> : null}

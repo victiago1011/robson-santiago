@@ -17,6 +17,7 @@ const postSchema = z.object({
   summary: z.string().max(1200),
   content: z.string().trim().min(1).max(50000),
   impact: z.string().max(12000),
+  show_impact: z.boolean(),
   source: z.string().max(1500),
   published_on: z.iso.date(),
   status: z.enum(["draft", "published"]),

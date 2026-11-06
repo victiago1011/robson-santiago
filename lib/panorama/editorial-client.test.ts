@@ -36,6 +36,7 @@ test("importação reconhece matérias numeradas, categorias e Por que importa",
   assert.equal(posts[2].categoryId, "b");
   assert.equal(posts[0].status, "Rascunho");
   assert.match(posts[0].impact, /juros influenciam/);
+  assert.equal(posts[0].showImpact, true);
   assert.match(posts[2].content, /eventos mundiais/);
   assert.ok(posts.every((post) => /^[0-9a-f-]{36}$/.test(post.id)));
   assert.ok(posts.every((post) => post.publishedAt === "2026-11-05"));
@@ -51,4 +52,13 @@ test("categoria duplicada ignora capitalização e espaços; renomeação preser
   assert.equal(uniqueCategoryName(categories, "  BRASIL "), false);
   assert.equal(uniqueCategoryName(categories, "Tecnologia"), true);
   assert.equal(uniqueCategoryName(categories, "brasil", "a"), true);
+});
+
+test("notícias curtas sem Por que importa são importadas com o bloco oculto", () => {
+  const raw = ["🇧🇷 BRASIL — ECONOMIA E POLÍTICA", "1. Notícia informativa de economia", "Uma nota curta sem análise."].join("\n");
+  const result = parsePanoramaText(raw, "2026-11-05", categories);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].showImpact, false);
+  assert.equal(result[0].impact, "");
+  assert.equal(result[0].status, "Rascunho");
 });

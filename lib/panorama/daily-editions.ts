@@ -93,3 +93,19 @@ export function shortEditionDate(day: string): { weekday: string; day: string; m
     month: new Intl.DateTimeFormat("pt-BR", { month: "short", timeZone: "UTC" }).format(date).replace(".", ""),
   };
 }
+
+/**
+ * Show sources once per topic instead of repeating identical references below
+ * each short article. Distinct source lists remain separate (not silently
+ * attributed to articles they may not support).
+ */
+export function uniqueTopicSources<T extends { source: string }>(posts: readonly T[]): string[] {
+  const sources = new Map<string, string>();
+  for (const post of posts) {
+    const clean = post.source.trim().replace(/\s+/g, " ");
+    if (clean && !sources.has(clean.toLocaleLowerCase("pt-BR"))) {
+      sources.set(clean.toLocaleLowerCase("pt-BR"), clean);
+    }
+  }
+  return [...sources.values()];
+}

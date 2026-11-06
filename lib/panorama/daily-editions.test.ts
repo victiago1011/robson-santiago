@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  groupNewsByTopic, longEditionDate, publishedDays, shortEditionDate, topicSymbol,
+  groupNewsByTopic, longEditionDate, publishedDays, shortEditionDate, topicSymbol, uniqueTopicSources,
 } from "./daily-editions";
 
 const categories = [
@@ -53,4 +53,14 @@ test("formatação das datas independe do fuso do navegador", () => {
   assert.match(longEditionDate("2026-11-05"), /5 de novembro de 2026/);
   assert.equal(shortEditionDate("2026-11-05").day, "05");
   assert.equal(shortEditionDate("2026-11-05").month, "nov");
+});
+
+test("fontes repetidas por notícia aparecem uma vez no rodapé do assunto", () => {
+  const sources = uniqueTopicSources([
+    { source: "Valor Econômico e Estadão" },
+    { source: "  Valor  Econômico e Estadão   " },
+    { source: "Folha de S.Paulo" },
+    { source: " " },
+  ]);
+  assert.deepEqual(sources, ["Valor Econômico e Estadão", "Folha de S.Paulo"]);
 });

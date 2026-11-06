@@ -160,7 +160,7 @@ export default function PanoramaAdminPreview({ initialData }: { initialData?: Ed
   }
 
   function updateDraft(id: string, next: EditorialPost) {
-    setDrafts((prev) => prev.map((draft) => draft.id === id ? { ...next, selected: draft.selected } : draft));
+    setDrafts((prev) => prev.map((draft) => draft.id === id ? { ...next, selected: draft.selected, duplicate: draft.duplicate } : draft));
   }
 
   async function persist(next: typeof data): Promise<boolean> {

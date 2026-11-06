@@ -28,10 +28,11 @@ export default function EditionExtrasEditor({
     setSaving(true);
     setMessage("");
     try {
-      const rows = draft.agenda_items.filter((item) => item.text.trim());
+
       const payload = {
         published_on: day,
-        agenda_items: rows,
+        agenda_items: draft.agenda_items,
+        historical_events: draft.historical_events.filter((item) => item.title.trim()),
         commentary_title: draft.commentary_title,
         commentary_body: draft.commentary_body,
       };
@@ -46,7 +47,7 @@ export default function EditionExtrasEditor({
       }
       const updated: EditionExtras = { ...payload, status: "draft" };
       onSaved(updated);
-      setMessage("Agenda e análise salvas como rascunho. Confira tudo antes de publicar esta edição.");
+      setMessage("Marcos históricos e análise salvos como rascunho. Revise a edição antes de publicar.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Erro ao salvar.");
     } finally {
@@ -59,49 +60,68 @@ export default function EditionExtrasEditor({
       <div className="rounded-2xl border border-[#dbe5eb] bg-white p-5 md:p-7">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-xs font-extrabold uppercase tracking-[0.12em] text-[#a17a3e]">Complementos da edição</p>
-            <h3 className="mt-2 text-xl font-extrabold text-[#143853]">🗓️ Agenda do Investidor</h3>
+            <p className="text-xs font-extrabold uppercase tracking-[0.12em] text-[#a17a3e]">Nesta data na história</p>
+            <h3 className="mt-2 text-xl font-extrabold text-[#143853]">📜 Marcos Históricos desta Data</h3>
           </div>
           <span className={"rounded-full px-3 py-1 text-xs font-bold " + (draft.status === "published" ? "bg-[#e3f2e9] text-[#286b49]" : "bg-[#fff3dc] text-[#956c30]")}>
             {draft.status === "published" ? "Publicada" : "Rascunho"}
           </span>
         </div>
         <p className="mt-2 text-sm leading-relaxed text-[#687f91]">
-          Registre acontecimentos a acompanhar. A data é opcional: quando não houver dia confirmado,
-          o site mostra “Em acompanhamento”, sem inventar datas no calendário.
+          Escolha acontecimentos de outros anos que ocorreram neste mesmo dia e mês.
+          Informe o ano, o fato e, de preferência, a fonte consultada. Não há preenchimento automático nem datas inventadas.
         </p>
         <div className="mt-5 space-y-3">
-          {draft.agenda_items.map((item, index) => (
-            <div key={index} className="grid gap-3 rounded-xl border border-[#e2eaf0] bg-[#f8fbfd] p-4 md:grid-cols-[minmax(0,1fr)_160px_auto]">
-              <label className="text-xs font-bold">Acontecimento
-                <textarea rows={2} maxLength={500} className={field} value={item.text}
+          {draft.historical_events.map((item, index) => (
+            <div key={index} className="space-y-4 rounded-xl border border-[#e2eaf0] bg-[#f8fbfd] p-4">
+              <div className="grid gap-3 sm:grid-cols-[110px_1fr_auto]">
+                <label className="text-xs font-bold">Ano
+                  <input type="text" inputMode="numeric" maxLength={4} className={field} placeholder="Ex.: 1989"
+                    value={item.year} onChange={(event) => setDraft((cur) => ({
+                      ...cur, historical_events: cur.historical_events.map((row,i) => i === index ? { ...row, year: event.target.value } : row),
+                    }))} />
+                </label>
+                <label className="text-xs font-bold">Título do marco histórico
+                  <input className={field} maxLength={180} value={item.title} placeholder="O que aconteceu nesta data?"
+                    onChange={(event) => setDraft((cur) => ({
+                      ...cur, historical_events: cur.historical_events.map((row,i) => i === index ? { ...row, title: event.target.value } : row),
+                    }))} />
+                </label>
+                <button type="button" className="self-end rounded-lg border border-[#d9b9ac] px-4 py-3 text-xs font-bold text-[#8e4f3f]"
+                  onClick={() => setDraft((cur) => ({ ...cur, historical_events: cur.historical_events.filter((_,i) => i !== index) }))}>Excluir</button>
+              </div>
+              <label className="block text-xs font-bold">Contexto (opcional)
+                <textarea rows={3} maxLength={1800} className={field} value={item.description}
                   onChange={(event) => setDraft((cur) => ({
-                    ...cur, agenda_items: cur.agenda_items.map((row, i) => i === index ? { ...row, text: event.target.value } : row),
+                    ...cur, historical_events: cur.historical_events.map((row,i) => i === index ? { ...row, description: event.target.value } : row),
                   }))} />
               </label>
-              <label className="text-xs font-bold">Data (opcional)
-                <input type="date" className={field} value={item.on ?? ""}
+              <label className="block text-xs font-bold">Fonte ou referência para conferência
+                <input className={field} maxLength={1000} value={item.source} placeholder="Veículo, livro ou endereço da fonte"
                   onChange={(event) => setDraft((cur) => ({
-                    ...cur, agenda_items: cur.agenda_items.map((row, i) => i === index ? { ...row, on: event.target.value || null } : row),
+                    ...cur, historical_events: cur.historical_events.map((row,i) => i === index ? { ...row, source: event.target.value } : row),
                   }))} />
               </label>
-              <button type="button" className="self-end rounded-lg border border-[#d9b9ac] px-4 py-3 text-xs font-bold text-[#8e4f3f]"
-                onClick={() => setDraft((cur) => ({ ...cur, agenda_items: cur.agenda_items.filter((_, i) => i !== index) }))}>Excluir</button>
             </div>
           ))}
         </div>
-        <button type="button" disabled={draft.agenda_items.length >= 30}
+        <button type="button" disabled={draft.historical_events.length >= 30}
           className="mt-4 rounded-lg border border-[#b8ccd9] bg-white px-4 py-3 text-sm font-bold text-[#275f83] disabled:opacity-40"
-          onClick={() => setDraft((cur) => ({ ...cur, agenda_items: [...cur.agenda_items, { text: "", on: null }] }))}>
-          + Adicionar acontecimento
-        </button>
+          onClick={() => setDraft((cur) => ({ ...cur, historical_events: [
+            ...cur.historical_events, { year: "", title: "", description: "", source: "" },
+          ] }))}>+ Adicionar marco histórico</button>
+        {draft.agenda_items.length > 0 ? (
+          <p className="mt-5 rounded-lg bg-[#fff8e8] px-4 py-3 text-xs text-[#86662f]">
+            A antiga Agenda do Investidor desta edição permanece arquivada, mas não é exibida como acontecimento histórico.
+          </p>
+        ) : null}
       </div>
 
       <div className="rounded-2xl border border-[#dbe5eb] bg-white p-5 md:p-7">
         <p className="text-xs font-extrabold uppercase tracking-[0.12em] text-[#a17a3e]">Encerramento da edição</p>
         <h3 className="mt-2 text-xl font-extrabold text-[#143853]">✍️ A Visão do Comentarista</h3>
         <p className="mt-2 text-sm leading-relaxed text-[#687f91]">
-          Esta análise aparece depois de todas as notícias e da agenda. É o espaço editorial assinado por Robson Santiago.
+          Esta análise encerra a edição, depois das notícias e dos marcos históricos. É o espaço editorial assinado por Robson Santiago.
         </p>
         <label className="mt-5 block text-sm font-semibold">Título da análise
           <input className={field} maxLength={240} value={draft.commentary_title}
@@ -118,7 +138,7 @@ export default function EditionExtrasEditor({
 
       <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-[#dbe5eb] bg-white p-5">
         <button type="button" disabled={saving} onClick={() => void save()} className={primary}>
-          {saving ? "Salvando…" : "Salvar agenda e análise como rascunho"}
+          {saving ? "Salvando…" : "Salvar marcos e análise como rascunho"}
         </button>
         <span className="text-xs text-[#71879a]">Salvar não publica. Depois utilize “Aprovar e publicar edição”.</span>
       </div>

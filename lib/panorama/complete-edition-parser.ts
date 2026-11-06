@@ -30,6 +30,11 @@ export function parseCompleteEdition(
   day: string,
   categories: EditorialCategory[],
 ): ExtractedEdition {
+  const commonReferences = raw.split(/\r?\n/).map((line) => line.trim())
+    .find((line) => /^(fontes(?: de referência)?)\s*:/i.test(line));
+  const attribution = commonReferences
+    ? "Fontes gerais informadas na edição (não verificadas individualmente): " + commonReferences.replace(/^[^:]+:\s*/, "").slice(0, 1280)
+    : "Panorama 360° — referência editorial a conferir na revisão";
   const posts: EditorialPost[] = [];
   const agenda: AgendaItem[] = [];
   const commentary: string[] = [];
@@ -51,7 +56,7 @@ export function parseCompleteEdition(
           summary: current.body.find((text) => text.trim())?.slice(0, 240) ?? "",
           content, impact, showImpact: !!impact,
           publishedAt: day, status: "Rascunho", featured: false,
-          source: "Edição do Panorama 360° — confirmar fontes na revisão",
+          source: attribution,
         });
       }
     }
@@ -136,6 +141,12 @@ export function parseCompleteEdition(
     else current.body.push(line);
   }
   flush();
+  // The portal provides a fixed author signature; avoid a duplicate signature
+  // when the pasted document ends with the author's credentials.
+  while (commentary.length && (/^Robson Santiago$/i.test(commentary[commentary.length - 1])
+    || /^40 anos de experiência/i.test(commentary[commentary.length - 1]))) {
+    commentary.pop();
+  }
   return {
     posts, agenda,
     commentaryTitle,

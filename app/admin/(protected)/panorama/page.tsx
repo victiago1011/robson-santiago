@@ -21,6 +21,7 @@ async function PanoramaPanelContent() {
         summary: post.summary,
         content: post.content,
         impact: post.impact,
+        showImpact: post.show_impact,
         source: post.source,
         publishedAt: post.published_on,
         status: (post.status === "published" ? "Publicado" : "Rascunho") as "Publicado" | "Rascunho",

@@ -9,6 +9,8 @@ import {
   type EditorialState,
 } from "@/lib/panorama/editorial-client";
 import { selectMinuteBriefing } from "@/lib/panorama/briefing";
+import MarketThermometerStrip from "@/components/financas/MarketThermometerStrip";
+import type { MarketIndicator } from "@/lib/panorama/market";
 import {
   groupNewsByTopic,
   longEditionDate,
@@ -20,7 +22,7 @@ import {
 const overline = "text-[0.69rem] font-extrabold uppercase tracking-[0.15em]";
 const surface = "rounded-2xl border border-[#dce5ed] bg-white shadow-[0_12px_36px_rgba(11,36,60,0.035)]";
 
-export default function PanoramaPortal({ initialData }: { initialData?: EditorialState }) {
+export default function PanoramaPortal({ initialData, initialIndicators = [] }: { initialData?: EditorialState; initialIndicators?: MarketIndicator[] }) {
   const { data, loading, error, reload } = usePanoramaContent(initialData);
   const [chosenDay, setChosenDay] = useState<string | null>(null);
   const [chosenTopic, setChosenTopic] = useState<string | null>(null);
@@ -122,6 +124,8 @@ export default function PanoramaPortal({ initialData }: { initialData?: Editoria
           </div>
         </div>
       </section>
+
+      <MarketThermometerStrip indicators={initialIndicators} />
 
       <div className="mx-auto max-w-[1230px] px-5 pb-16 pt-9 md:px-8 md:pt-12">
         {loading ? (

@@ -10,6 +10,9 @@ const palette: Record<MarketSlug, string> = {
   bitcoin: "border-[#f4dfbe] bg-[#fff2df] text-[#b57620]",
   ouro: "border-[#eee0b8] bg-[#faf1d7] text-[#ad802b]",
   inflacao: "border-[#f2d9d3] bg-[#fff0eb] text-[#bd6b53]",
+  nasdaq: "border-[#d4d9ec] bg-[#e9edfa] text-[#365f9a]",
+  sp500: "border-[#d7e8e8] bg-[#e9f7f6] text-[#276879]",
+  dowjones: "border-[#dfe1e7] bg-[#f0f2f7] text-[#53657d]",
 };
 
 function MarketGlyph({ slug }: { slug: MarketSlug }) {
@@ -28,7 +31,7 @@ function MarketGlyph({ slug }: { slug: MarketSlug }) {
     );
   }
 
-  if (slug === "ibovespa") {
+  if (slug === "ibovespa" || slug === "nasdaq" || slug === "sp500" || slug === "dowjones") {
     return (
       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="h-6 w-6" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 19h18M5 16v-3m5 3V9m5 7v-5m5 5V6" opacity=".65" />

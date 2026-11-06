@@ -96,17 +96,14 @@ export async function POST(request: NextRequest) {
         updated_at: new Date().toISOString(),
       }))));
     } else if (input.type === "edition:publish") {
-      // One atomic PostgREST UPDATE for the draft portion of a single dated edition.
-      const { data: publishedRows, error: publishError } = await supabase
-        .from("panorama_posts")
-        .update({ status: "published", updated_at: new Date().toISOString() })
-        .eq("published_on", input.date)
-        .eq("status", "draft")
-        .select("id");
+      // An atomic database transaction publishes articles and the optional
+      // agenda/commentary draft together; no partial edition release.
+      const { data: publishedCount, error: publishError } = await supabase
+        .rpc("panorama_publish_edition", { p_date: input.date });
       if (publishError) {
         return NextResponse.json({ error: "Não foi possível publicar a edição. Tente novamente." }, { status: 503 });
       }
-      return NextResponse.json({ ok: true, published: publishedRows?.length ?? 0 });
+      return NextResponse.json({ ok: true, published: Number(publishedCount ?? 0) });
     }
     if (error) {
       const status = error.code === "23505" || error.code === "23503" ? 409 : 422;

@@ -132,6 +132,7 @@ export default function PanoramaAdminPreview({ initialData }: { initialData?: Ed
   const [reviewDate, setReviewDate] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
 
+  const noticeIsError = /^(Confira|Não|Falha|Erro|Selecione|Digite|Nome inválido|Serviço|Conflito|Acesso|Campos inválidos)/i.test(notice);
   const published = data.posts.filter((post) => post.status === "Publicado").length;
   const draftCount = data.posts.length - published;
   const recentPosts = [...data.posts].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt)).slice(0, 5);
@@ -329,7 +330,7 @@ export default function PanoramaAdminPreview({ initialData }: { initialData?: Ed
         ))}
       </div>
 
-      {notice ? <p role="status" className="rounded-xl border border-[#cfe2d7] bg-[#f0f8f3] p-4 text-sm font-semibold text-[#2e6f4b]">{notice}</p> : null}
+      {notice ? <p role={noticeIsError ? "alert" : "status"} className={"rounded-xl border p-4 text-sm font-semibold " + (noticeIsError ? "border-[#e8c7c0] bg-[#fff2ef] text-[#913d31]" : "border-[#cfe2d7] bg-[#f0f8f3] text-[#2e6f4b]")}>{notice}</p> : null}
 
       {view === "termometro" ? <MarketThermometerEditor /> : null}
 

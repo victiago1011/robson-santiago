@@ -1,37 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
 import { resolveAdminAccess } from "@/lib/admin/guard";
 import { readPanoramaData } from "@/lib/panorama/store";
 import { getSupabase } from "@/lib/supabase/server";
+import { describeEditorialValidation, editorialRequestSchema, resolveImpactVisibility } from "@/lib/panorama/editorial-validation";
 
 export const dynamic = "force-dynamic";
 
-const categorySchema = z.object({
-  id: z.uuid(),
-  name: z.string().trim().min(2).max(70),
-}).strict();
-const postSchema = z.object({
-  id: z.uuid(),
-  category_id: z.uuid(),
-  title: z.string().trim().min(5).max(240),
-  summary: z.string().max(1200),
-  content: z.string().trim().min(1).max(50000),
-  impact: z.string().max(12000),
-  show_impact: z.boolean(),
-  source: z.string().max(1500),
-  published_on: z.iso.date(),
-  status: z.enum(["draft", "published"]),
-  featured: z.boolean(),
-}).strict();
-const requestSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("category:create"), category: categorySchema }).strict(),
-  z.object({ type: z.literal("category:update"), category: categorySchema }).strict(),
-  z.object({ type: z.literal("category:delete"), id: z.uuid() }).strict(),
-  z.object({ type: z.literal("post:upsert"), post: postSchema }).strict(),
-  z.object({ type: z.literal("post:delete"), id: z.uuid() }).strict(),
-  z.object({ type: z.literal("posts:create"), posts: z.array(postSchema.extend({ status: z.literal("draft") })).min(1).max(40) }).strict(),
-  z.object({ type: z.literal("edition:publish"), date: z.iso.date() }).strict(),
-]);
 
 function forbidden(access: Awaited<ReturnType<typeof resolveAdminAccess>>) {
   if (access.ok) return null;
@@ -73,9 +47,9 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: "JSON inválido." }, { status: 400 });
   }
-  const parsed = requestSchema.safeParse(json);
+  const parsed = editorialRequestSchema.safeParse(json);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Campos inválidos. Revise os títulos e textos." }, { status: 422 });
+    return NextResponse.json({ error: describeEditorialValidation(parsed.error) }, { status: 422 });
   }
 
   const input = parsed.data;
@@ -92,9 +66,24 @@ export async function POST(request: NextRequest) {
       ({ error } = await supabase.from("panorama_categories").delete().eq("id", input.id));
     } else if (input.type === "post:upsert") {
       const { id, ...fields } = input.post;
+      let persistedVisibility: boolean | undefined;
+      if (fields.show_impact === undefined) {
+        // A browser tab using the previous editor lacks this field.
+        // Preserve the existing setting rather than re-enabling hidden text.
+        const { data: existing, error: lookupError } = await supabase
+          .from("panorama_posts")
+          .select("show_impact")
+          .eq("id", id)
+          .maybeSingle();
+        if (lookupError) return NextResponse.json({
+          error: "Não foi possível verificar a preferência da notícia. Recarregue e tente novamente.",
+        }, { status: 503 });
+        persistedVisibility = existing?.show_impact;
+      }
       ({ error } = await supabase.from("panorama_posts").upsert({
         id,
         ...fields,
+        show_impact: resolveImpactVisibility(fields.show_impact, persistedVisibility, fields.impact),
         updated_at: new Date().toISOString(),
       }, { onConflict: "id" }));
     } else if (input.type === "post:delete") {
@@ -103,6 +92,7 @@ export async function POST(request: NextRequest) {
       // Bulk imports can never bypass editorial review.
       ({ error } = await supabase.from("panorama_posts").insert(input.posts.map((post) => ({
         ...post,
+        show_impact: resolveImpactVisibility(post.show_impact, undefined, post.impact),
         updated_at: new Date().toISOString(),
       }))));
     } else if (input.type === "edition:publish") {

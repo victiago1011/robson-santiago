@@ -10,6 +10,7 @@ export type EditorialPost = {
   summary: string;
   content: string;
   impact: string;
+  showImpact: boolean;
   publishedAt: string;
   status: "Rascunho" | "Publicado";
   featured: boolean;
@@ -21,7 +22,7 @@ type RawPanorama = {
   categories: EditorialCategory[];
   posts: Array<{
     id: string; title: string; category_id: string; summary: string; content: string;
-    impact: string; source: string; published_on: string; status: "draft" | "published"; featured: boolean;
+    impact: string; show_impact: boolean; source: string; published_on: string; status: "draft" | "published"; featured: boolean;
   }>;
 };
 
@@ -35,6 +36,7 @@ function mapDbState(raw: RawPanorama): EditorialState {
       summary: post.summary,
       content: post.content,
       impact: post.impact,
+      showImpact: post.show_impact,
       source: post.source,
       publishedAt: post.published_on,
       status: post.status === "published" ? "Publicado" : "Rascunho",
@@ -51,6 +53,7 @@ function toDbPost(post: EditorialPost) {
     summary: post.summary,
     content: post.content.trim(),
     impact: post.impact,
+    show_impact: post.showImpact,
     source: post.source,
     published_on: post.publishedAt,
     status: post.status === "Publicado" ? "published" : "draft",
@@ -224,6 +227,7 @@ export function parsePanoramaText(raw: string, date: string, categories: Editori
     summary: item.body[0]?.slice(0, 240) || "",
     content: item.body.join("\n\n"),
     impact: item.impact.join("\n\n"),
+    showImpact: item.impact.join("\n\n").trim().length > 0,
     publishedAt: date,
     status: "Rascunho",
     featured: false,

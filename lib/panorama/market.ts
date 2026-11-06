@@ -24,7 +24,7 @@ export function publishedMarketIndicators(items: readonly MarketIndicator[]) {
 export function marketMovement(direction: MarketDirection) {
   if (direction === "up") return { symbol: "▲", label: "Alta", color: "text-emerald-700" };
   if (direction === "down") return { symbol: "▼", label: "Queda", color: "text-rose-700" };
-  return { symbol: "—", label: "Estável ou sem variação informada", color: "text-slate-500" };
+  return { symbol: "—", label: "Neutro", color: "text-slate-500" };
 }
 
 export function marketDate(date: string) {

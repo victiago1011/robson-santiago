@@ -20,5 +20,6 @@ test("arrows show direction, not investment recommendation", () => {
   assert.equal(marketMovement("up").symbol, "▲");
   assert.equal(marketMovement("down").symbol, "▼");
   assert.equal(marketMovement("flat").symbol, "—");
+  assert.equal(marketMovement("flat").label, "Neutro");
   assert.equal(marketDate("2026-11-04"), "04/11/2026");
 });

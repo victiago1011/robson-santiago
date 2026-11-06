@@ -12,6 +12,8 @@ import { selectMinuteBriefing } from "@/lib/panorama/briefing";
 import MarketThermometerStrip from "@/components/financas/MarketThermometerStrip";
 import TopicIcon from "@/components/financas/TopicIcon";
 import type { MarketIndicator } from "@/lib/panorama/market";
+import type { EditionExtras } from "@/lib/panorama/edition-extras";
+import EditionExtrasPublic from "@/components/financas/EditionExtrasPublic";
 import {
   groupNewsByTopic,
   longEditionDate,
@@ -23,7 +25,13 @@ import {
 const overline = "text-[0.69rem] font-extrabold uppercase tracking-[0.15em]";
 const surface = "rounded-2xl border border-[#dce5ed] bg-white shadow-[0_12px_36px_rgba(11,36,60,0.035)]";
 
-export default function PanoramaPortal({ initialData, initialIndicators = [] }: { initialData?: EditorialState; initialIndicators?: MarketIndicator[] }) {
+export default function PanoramaPortal({
+  initialData, initialIndicators = [], initialEditions = [],
+}: {
+  initialData?: EditorialState;
+  initialIndicators?: MarketIndicator[];
+  initialEditions?: EditionExtras[];
+}) {
   const { data, loading, error, reload } = usePanoramaContent(initialData);
   const [chosenDay, setChosenDay] = useState<string | null>(null);
   const [chosenTopic, setChosenTopic] = useState<string | null>(null);
@@ -48,6 +56,7 @@ export default function PanoramaPortal({ initialData, initialIndicators = [] }: 
   const dailyPosts = useMemo(() => topics.flatMap((topic) => topic.posts), [topics]);
   const dailyBriefing = useMemo(() => selectMinuteBriefing(dailyPosts), [dailyPosts]);
   const selected = data.posts.find((post) => post.status === "Publicado" && post.id === activeId) || null;
+  const editionExtras = initialEditions.find((entry) => entry.published_on === day);
   const total = dailyPosts.length;
   const visibleTopics = chosenTopic === "all" ? topics : topics.filter((topic) => topic.id === chosenTopic);
 
@@ -383,6 +392,7 @@ export default function PanoramaPortal({ initialData, initialIndicators = [] }: 
             ) : (
               <p className="mt-8 text-center text-sm text-[#72879a]">Clique em um assunto para ler todas as notícias reunidas naquele tema.</p>
             )}
+            <EditionExtrasPublic edition={editionExtras} />
           </>
         ) : (
           <section className={surface + " p-8 text-center sm:p-12"}>

@@ -451,12 +451,99 @@ export default function PanoramaAdminPreview({ initialData }: { initialData?: Ed
               <div className="mt-6"><FormFields value={editing} categories={data.categories} onChange={setEditing} /></div>
               <button type="submit" disabled={busy} className={primary + " mt-6 disabled:opacity-40"}>Salvar publicação</button>
             </form>
+          ) : reviewDate ? (
+            <section aria-label="Revisão da edição antes de publicar">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className={overline + " text-[#a17a3e]"}>Revisão editorial · acesso restrito</p>
+                  <h2 className="mt-2 text-2xl font-extrabold">Edição de {formatEditorialDate(reviewDate)}</h2>
+                  <p className="mt-2 text-sm text-[#647b8d]">
+                    {editionPosts.length} notícias nesta edição, {editionPosts.filter((post) => post.status === "Rascunho").length} aguardando aprovação.
+                    Confira o texto, o bloco “Por que importa?” e as fontes antes de publicar.
+                  </p>
+                </div>
+                <button type="button" onClick={() => setReviewDate(null)} className={secondary}>← Voltar às publicações</button>
+              </div>
+
+              <div className="mt-6 space-y-6">
+                {data.categories.map((category) => ({
+                  category,
+                  posts: editionPosts.filter((post) => post.categoryId === category.id),
+                })).filter((group) => group.posts.length > 0).map((group) => (
+                  <div key={group.category.id} className="overflow-hidden rounded-xl border border-[#dae3eb]">
+                    <div className="flex flex-wrap items-center justify-between gap-3 bg-[#eaf1f7] px-5 py-4">
+                      <h3 className="text-lg font-extrabold">{group.category.name}</h3>
+                      <span className="text-xs text-[#547086]">{group.posts.length} {group.posts.length === 1 ? "notícia" : "notícias"}</span>
+                    </div>
+                    <div className="divide-y divide-[#e3eaf0]">
+                      {group.posts.map((post) => (
+                        <article key={post.id} className="px-5 py-4">
+                          <details>
+                            <summary className="cursor-pointer text-sm font-bold leading-relaxed text-[#1a3b56]">
+                              {post.title} <span className={"ml-2 text-xs font-semibold " + (post.status === "Rascunho" ? "text-[#98732b]" : "text-[#2b7953]")}>
+                                ({post.status})
+                              </span>
+                            </summary>
+                            <div className="mt-4 space-y-4 border-t border-[#e5ecf1] pt-4 text-sm leading-relaxed text-[#37566d]">
+                              {post.summary ? <p className="font-semibold">{post.summary}</p> : null}
+                              <p className="whitespace-pre-wrap">{post.content}</p>
+                              {post.impact ? <div className="rounded-lg border-l-4 border-[#d6a751] bg-[#f3f7fa] p-4">
+                                <p className="font-bold">Por que importa?</p>
+                                <p className="mt-2 whitespace-pre-wrap">{post.impact}</p>
+                              </div> : null}
+                              <p className="text-xs text-[#657d8d]">Fonte: {post.source || "Não informada"}</p>
+                              <button type="button" className={secondary} onClick={() => setEditing({ ...post })}>Editar notícia</button>
+                            </div>
+                          </details>
+                        </article>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-7 rounded-xl border border-[#d6e2eb] bg-[#f3f8fb] p-5">
+                <p className="text-sm leading-relaxed text-[#416278]">
+                  <strong>Publicação definitiva:</strong> esta ação tornará públicas todas as notícias que ainda estão em rascunho
+                  nesta data. Nada é publicado automaticamente ao colar ou salvar o texto.
+                </p>
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <button type="button" disabled={publishing || busy || !editionPosts.some((post) => post.status === "Rascunho")}
+                    onClick={() => void publishEdition()}
+                    className={primary + " disabled:cursor-not-allowed disabled:opacity-40"}>
+                    {publishing ? "Publicando edição…" : "Aprovar e publicar edição de " + formatEditorialDate(reviewDate)}
+                  </button>
+                  <button type="button" onClick={() => setReviewDate(null)} className={secondary}>Continuar revisando depois</button>
+                </div>
+              </div>
+            </section>
           ) : (
             <>
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div><p className={overline + " text-[#a17a3e]"}>Gestão editorial</p><h2 className="mt-2 text-2xl font-extrabold">Todas as notícias</h2></div>
                 <button type="button" className={primary} onClick={() => setEditing(newPost(data.categories[0]?.id || ""))}>+ Nova notícia</button>
               </div>
+              {draftDays.length ? (
+                <section aria-labelledby="edition-drafts-title" className="mt-6 rounded-2xl border border-[#dcc79e] bg-[#fffbf0] p-5">
+                  <p className={overline + " text-[#a07839]"}>Aguardando aprovação</p>
+                  <h3 id="edition-drafts-title" className="mt-2 text-lg font-extrabold">Edições com notícias em rascunho</h3>
+                  <p className="mt-1 text-sm text-[#6b7581]">
+                    Revise os textos e publique a edição inteira somente quando estiver pronta.
+                  </p>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    {draftDays.map((date) => {
+                      const pendingCount = data.posts.filter((post) => post.publishedAt === date && post.status === "Rascunho").length;
+                      return (
+                        <button key={date} type="button" onClick={() => { setReviewDate(date); setNotice(""); }}
+                          className="flex min-h-14 flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e3d4b7] bg-white px-4 py-3 text-left text-sm font-semibold text-[#193b56] transition hover:border-[#b59258] hover:bg-[#fffdf8]">
+                          <span>Edição de {formatEditorialDate(date)} <span className="block text-xs font-normal text-[#697f8f]">{pendingCount} notícias aguardando</span></span>
+                          <span className="text-[#996d2e]">Revisar edição →</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+              ) : null}
               <div className="mt-6 grid gap-3 sm:grid-cols-[1fr_180px]">
                 <label className="text-sm font-semibold">Pesquisar
                   <input className={field} type="search" value={postQuery} onChange={(e) => setPostQuery(e.target.value)} placeholder="Título da publicação" />

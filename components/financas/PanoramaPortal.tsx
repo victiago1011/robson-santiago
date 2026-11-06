@@ -10,13 +10,13 @@ import {
 } from "@/lib/panorama/editorial-client";
 import { selectMinuteBriefing } from "@/lib/panorama/briefing";
 import MarketThermometerStrip from "@/components/financas/MarketThermometerStrip";
+import TopicIcon from "@/components/financas/TopicIcon";
 import type { MarketIndicator } from "@/lib/panorama/market";
 import {
   groupNewsByTopic,
   longEditionDate,
   publishedDays,
   shortEditionDate,
-  topicSymbol,
   uniqueTopicSources,
 } from "@/lib/panorama/daily-editions";
 
@@ -144,12 +144,12 @@ export default function PanoramaPortal({ initialData, initialIndicators = [] }: 
             <button type="button" onClick={closePost} className="mb-6 inline-flex min-h-11 items-center gap-2 text-sm font-bold text-[#1b5c8a] hover:underline">← Voltar à edição do dia</button>
             <article className={surface + " overflow-hidden"}>
               <div className="border-b border-[#e4eaf0] px-6 py-8 sm:px-10 md:px-14 md:py-12">
-                <p className={overline + " text-[#ab8139]"}>
-                  {topicSymbol(data.categories.find((category) => category.id === selected.categoryId)?.name || "")}
-                  {" "}{data.categories.find((category) => category.id === selected.categoryId)?.name || "Notícia"}
-                  <span className="mx-2 text-[#a9b6c2]">•</span>
+                <div className={overline + " flex flex-wrap items-center gap-2 text-[#ab8139]"}>
+                  <TopicIcon name={data.categories.find((category) => category.id === selected.categoryId)?.name || ""} size="small" />
+                  <span>{data.categories.find((category) => category.id === selected.categoryId)?.name || "Notícia"}</span>
+                  <span className="mx-1 text-[#a9b6c2]">•</span>
                   <time dateTime={selected.publishedAt}>{formatEditorialDate(selected.publishedAt)}</time>
-                </p>
+                </div>
                 <h2 className="mt-5 text-3xl font-extrabold leading-tight tracking-tight md:text-5xl">{selected.title}</h2>
                 <p className="mt-5 max-w-[720px] text-base leading-relaxed text-[#62798b] md:text-lg">{selected.summary}</p>
                 <div className="mt-7 flex flex-wrap items-center justify-between gap-3 text-xs text-[#708398]">
@@ -265,7 +265,7 @@ export default function PanoramaPortal({ initialData, initialIndicators = [] }: 
                     className={"group flex min-h-[230px] flex-col rounded-2xl border p-6 text-left transition hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#c3a26b] " +
                       (chosenTopic === topic.id ? "border-[#0d3d62] bg-[#e6f0f7] shadow-[0_10px_25px_rgba(12,42,72,0.09)]" : "border-[#dbe4ed] bg-white")}>
                     <span className="flex items-start justify-between gap-3">
-                      <span className="text-4xl leading-none" aria-hidden="true">{topicSymbol(topic.name)}</span>
+                      <TopicIcon name={topic.name} />
                       <span className="rounded-full bg-[#edf2f7] px-3 py-1 text-xs font-bold text-[#547089]">
                         {topic.posts.length} {topic.posts.length === 1 ? "notícia" : "notícias"}
                       </span>
@@ -305,7 +305,7 @@ export default function PanoramaPortal({ initialData, initialIndicators = [] }: 
                     <section key={topic.id} aria-label={"Notícias de " + topic.name}
                       className={surface + " overflow-hidden"}>
                       <header className="flex flex-wrap items-center gap-4 border-b border-[#e0e8ef] bg-[#e8f0f6] px-5 py-6 sm:px-8">
-                        <span className="text-4xl" aria-hidden="true">{topicSymbol(topic.name)}</span>
+                        <TopicIcon name={topic.name} />
                         <div className="flex-1">
                           <h3 className="text-xl font-extrabold tracking-tight sm:text-2xl">{topic.name}</h3>
                           <p className="mt-1 text-xs font-semibold text-[#5e7b90]">{topic.posts.length} {topic.posts.length === 1 ? "notícia" : "notícias"} nesta edição</p>

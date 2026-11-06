@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { resolveAdminAccess } from "@/lib/admin/guard";
-import { readMarketIndicators } from "@/lib/panorama/market-store";
+import { readMarketIndicators, readMarketSnapshots } from "@/lib/panorama/market-store";
 import { MARKET_SLUGS } from "@/lib/panorama/market";
 import { getSupabase } from "@/lib/supabase/server";
 
@@ -19,7 +19,7 @@ const editable = z.object({
   "Preencha valor e data antes de publicar um indicador.",
 );
 
-const payload = z.object({ indicators: z.array(editable).length(MARKET_SLUGS.length) }).strict().refine(
+const payload = z.object({ edition_on: z.iso.date(), indicators: z.array(editable).length(MARKET_SLUGS.length) }).strict().refine(
   (data) => new Set(data.indicators.map((row) => row.slug)).size === MARKET_SLUGS.length,
   "Todos os indicadores precisam estar presentes uma única vez.",
 );
@@ -32,11 +32,27 @@ async function checkAccess() {
   });
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const denied = await checkAccess();
   if (denied) return denied;
   try {
-    return NextResponse.json({ indicators: await readMarketIndicators(true) }, {
+    const date = new URL(request.url).searchParams.get("date");
+    if (date && !/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) {
+      return NextResponse.json({ error: "Data inválida." }, { status: 400 });
+    }
+    const [allLabels, historical] = await Promise.all([
+      readMarketIndicators(true), readMarketSnapshots(true),
+    ]);
+    const entries = date ? historical.filter((row) => row.edition_on === date) : [];
+    const bySlug = new Map(entries.map((row) => [row.slug, row]));
+    const indicators = allLabels.map((item) => {
+      const saved = bySlug.get(item.slug);
+      return saved ?? {
+        ...item, display_value: "", variation: "", direction: "flat" as const,
+        reference_on: null, visible: false,
+      };
+    });
+    return NextResponse.json({ indicators, edition_on: date }, {
       headers: { "Cache-Control": "no-store" },
     });
   } catch {
@@ -75,14 +91,15 @@ export async function PUT(request: NextRequest) {
       nasdaq: "Nasdaq Composite", sp500: "S&P 500", dowjones: "Dow Jones",
     };
     const rows = result.data.indicators.map((item) => ({
+      edition_on: result.data.edition_on,
       ...item,
       label: labels[item.slug],
       display_order: MARKET_SLUGS.indexOf(item.slug) + 1,
       updated_at: new Date().toISOString(),
     }));
-    const { error } = await supabase.from("panorama_market_indicators").upsert(rows, { onConflict: "slug" });
+    const { error } = await supabase.from("panorama_market_snapshots").upsert(rows, { onConflict: "edition_on,slug" });
     if (error) return NextResponse.json({ error: "Não foi possível salvar os indicadores." }, { status: 503 });
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, edition_on: result.data.edition_on });
   } catch {
     return NextResponse.json({ error: "Serviço indisponível." }, { status: 503 });
   }

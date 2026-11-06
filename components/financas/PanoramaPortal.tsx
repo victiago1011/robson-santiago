@@ -12,6 +12,7 @@ import { selectMinuteBriefing } from "@/lib/panorama/briefing";
 import MarketThermometerStrip from "@/components/financas/MarketThermometerStrip";
 import TopicIcon from "@/components/financas/TopicIcon";
 import type { MarketSnapshot } from "@/lib/panorama/market-store";
+import { indicatorsForEdition } from "@/lib/panorama/market";
 import type { EditionExtras } from "@/lib/panorama/edition-extras";
 import EditionExtrasPublic from "@/components/financas/EditionExtrasPublic";
 import {
@@ -57,7 +58,7 @@ export default function PanoramaPortal({
   const dailyBriefing = useMemo(() => selectMinuteBriefing(dailyPosts), [dailyPosts]);
   const selected = data.posts.find((post) => post.status === "Publicado" && post.id === activeId) || null;
   const editionExtras = initialEditions.find((entry) => entry.published_on === day);
-  const editionSnapshots = initialSnapshots.filter((item) => item.edition_on === day);
+  const editionSnapshots = indicatorsForEdition(initialSnapshots, day);
   const hasHistorical = Boolean(editionExtras?.status === "published"
     && editionExtras.historical_events.some((item) => item.title.trim()));
   const total = dailyPosts.length;

@@ -3,9 +3,11 @@
 import { useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import MarketThermometerEditor from "@/components/financas/MarketThermometerEditor";
+import EditionExtrasEditor from "@/components/financas/EditionExtrasEditor";
+import { parseCompleteEdition } from "@/lib/panorama/complete-edition-parser";
+import { editionHasContent, emptyEditionExtras, type EditionExtras } from "@/lib/panorama/edition-extras";
 import {
   formatEditorialDate,
-  parsePanoramaText,
   uniqueCategoryName,
   usePanoramaContent,
   type EditorialPost,
@@ -116,12 +118,16 @@ function FormFields({
   );
 }
 
-export default function PanoramaAdminPreview({ initialData }: { initialData?: EditorialState }) {
+export default function PanoramaAdminPreview({ initialData, initialEditions = [] }: {
+  initialData?: EditorialState; initialEditions?: EditionExtras[];
+}) {
   const { data, save, loading, busy, error, reload } = usePanoramaContent(initialData);
   const [view, setView] = useState<View>("visao");
   const [rawText, setRawText] = useState("");
   const [importDate, setImportDate] = useState(todayInBrazil);
   const [drafts, setDrafts] = useState<ImportDraft[]>([]);
+  const [editions, setEditions] = useState<EditionExtras[]>(initialEditions);
+  const [pendingSections, setPendingSections] = useState<EditionExtras | null>(null);
   const [notice, setNotice] = useState("");
   const [editing, setEditing] = useState<EditorialPost | null>(null);
   const [addingCategory, setAddingCategory] = useState("");
@@ -136,8 +142,10 @@ export default function PanoramaAdminPreview({ initialData }: { initialData?: Ed
   const published = data.posts.filter((post) => post.status === "Publicado").length;
   const draftCount = data.posts.length - published;
   const recentPosts = [...data.posts].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt)).slice(0, 5);
-  const draftDays = useMemo(() => [...new Set(data.posts.filter((post) => post.status === "Rascunho").map((post) => post.publishedAt))]
-    .sort((a, b) => b.localeCompare(a)), [data.posts]);
+  const draftDays = useMemo(() => [...new Set([
+    ...data.posts.filter((post) => post.status === "Rascunho").map((post) => post.publishedAt),
+    ...editions.filter((item) => item.status === "draft" && editionHasContent(item)).map((item) => item.published_on),
+  ])].sort((a, b) => b.localeCompare(a)), [data.posts, editions]);
   const editionPosts = useMemo(() => data.posts.filter((post) => post.publishedAt === reviewDate)
     .sort((a, b) => a.title.localeCompare(b.title, "pt-BR")), [data.posts, reviewDate]);
   const shownPosts = useMemo(() => data.posts.filter((post) => (
@@ -153,7 +161,12 @@ export default function PanoramaAdminPreview({ initialData }: { initialData?: Ed
   }
 
   function analyzeImport() {
-    const output = parsePanoramaText(rawText, importDate, data.categories);
+    const extracted = parseCompleteEdition(rawText, importDate, data.categories);
+    const output = extracted.posts;
+    setPendingSections({
+      published_on: importDate, agenda_items: extracted.agenda,
+      commentary_title: extracted.commentaryTitle, commentary_body: extracted.commentaryBody, status: "draft",
+    });
     const existing = new Set(data.posts.map((post) => post.publishedAt + "|" + post.title.trim().toLocaleLowerCase("pt-BR")));
     const duplicateCount = output.filter((post) => existing.has(post.publishedAt + "|" + post.title.trim().toLocaleLowerCase("pt-BR"))).length;
     setDrafts(output.map((post) => ({
@@ -190,23 +203,58 @@ export default function PanoramaAdminPreview({ initialData }: { initialData?: Ed
     }
     const posts = chosen.map(({ selected: _selected, duplicate: _duplicate, ...post }) => ({ ...post, status: "Rascunho" as const }));
     if (!await persist({ ...data, posts: [...posts, ...data.posts] })) return;
+    if (pendingSections && editionHasContent(pendingSections)) {
+      try {
+        await saveEditionSections(pendingSections);
+      } catch (cause) {
+        setNotice("Notícias salvas, mas a agenda/análise não: " + (cause instanceof Error ? cause.message : "revise mais tarde."));
+        setReviewDate(importDate); setView("publicacoes");
+        return;
+      }
+    }
     setDrafts([]);
+    setPendingSections(null);
     setRawText("");
     setNotice(posts.length + " rascunho(s) salvo(s). Revise a edição completa antes de publicar.");
     setReviewDate(importDate);
     setView("publicacoes");
   }
 
+  async function saveEditionSections(payload: EditionExtras) {
+    const response = await fetch("/api/admin/panorama/editions", {
+      method: "PUT", credentials: "same-origin", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        published_on: payload.published_on, agenda_items: payload.agenda_items.filter((item) => item.text.trim()),
+        commentary_title: payload.commentary_title, commentary_body: payload.commentary_body,
+      }),
+    });
+    if (!response.ok) {
+      const info = await response.json().catch(() => ({})) as { error?: string };
+      throw new Error(info.error || "Não foi possível salvar os complementos.");
+    }
+    setEditions((current) => [...current.filter((item) => item.published_on !== payload.published_on), { ...payload, status: "draft" }]);
+  }
+
+  async function reloadEditions() {
+    const response = await fetch("/api/admin/panorama/editions", { cache: "no-store", credentials: "same-origin" });
+    if (!response.ok) throw new Error("Não foi possível carregar os complementos.");
+    const info = await response.json() as { editions: EditionExtras[] };
+    setEditions(info.editions);
+  }
+
   async function publishEdition() {
     if (!reviewDate || publishing) return;
     const count = editionPosts.filter((post) => post.status === "Rascunho").length;
-    if (!count) {
-      setNotice("Não há rascunhos para publicar nesta edição.");
+    const pendingExtras = editions.find((item) => item.published_on === reviewDate
+      && item.status === "draft" && editionHasContent(item));
+    if (!count && !pendingExtras) {
+      setNotice("Não há rascunhos nem complementos pendentes para publicar.");
       return;
     }
     if (!window.confirm(
-      "Publicar " + count + " notícia(s) da edição de " + formatEditorialDate(reviewDate)
-      + " no site público? Confirme que revisou conteúdo, categorias e fontes.",
+      "Publicar " + count + " notícia(s)" + (pendingExtras ? " e os complementos editoriais" : "")
+      + " da edição de " + formatEditorialDate(reviewDate)
+      + "? Confirme que revisou notícias, agenda, análise e fontes.",
     )) return;
     setPublishing(true);
     setNotice("");
@@ -222,8 +270,8 @@ export default function PanoramaAdminPreview({ initialData }: { initialData?: Ed
         throw new Error(result.error || "Falha ao publicar a edição.");
       }
       const result = await response.json() as { published: number };
-      await reload();
-      setNotice(result.published + " notícia(s) publicadas em " + formatEditorialDate(reviewDate) + ".");
+      await Promise.all([reload(), reloadEditions()]);
+      setNotice(result.published + " notícia(s) publicadas, incluindo complementos aprovados, em " + formatEditorialDate(reviewDate) + ".");
       setReviewDate(null);
     } catch (cause) {
       setNotice(cause instanceof Error ? cause.message : "Não foi possível publicar a edição.");
@@ -385,10 +433,10 @@ export default function PanoramaAdminPreview({ initialData }: { initialData?: Ed
           <section className={panel + " p-5 md:p-7"}>
             <p className={overline + " text-[#a47c39]"}>Publicação em lote</p>
             <h2 className="mt-2 text-2xl font-extrabold">Escreva ou cole a edição completa</h2>
-            <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[#667b8e]">Escreva ou cole o texto do Panorama neste campo. O sistema reconhece matérias que começam por “1. Título”, “2. Título” e assim por diante, além de seções como Brasil, Mundo e “Por que importa?”. Não é necessário preencher um formulário por notícia.</p>
+            <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[#667b8e]">Escreva ou cole o texto do Panorama neste campo. O sistema reconhece matérias que começam por “1. Título”, “2. Título” e assim por diante, além de seções como Brasil, Mundo e “Por que importa?”. O sistema também separa a Agenda do Investidor e a Análise do Comentarista, sem tratá-las como notícias.</p>
             <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
               <label className="block text-sm font-semibold">Escreva ou cole o Panorama completo
-                <textarea value={rawText} onChange={(e) => { setRawText(e.target.value); setDrafts([]); }} rows={13} className={field + " font-mono text-xs leading-relaxed"} placeholder={"Cole aqui o PANORAMA 360° completo...\n\n🇧🇷 BRASIL — ECONOMIA E POLÍTICA\n1. Título da notícia\nTexto...\nPOR QUE IMPORTA?\nImpacto..."} />
+                <textarea value={rawText} onChange={(e) => { setRawText(e.target.value); setDrafts([]); setPendingSections(null); }} rows={13} className={field + " font-mono text-xs leading-relaxed"} placeholder={"Cole aqui o PANORAMA 360° completo...\n\n🇧🇷 BRASIL — ECONOMIA E POLÍTICA\n1. Título da notícia\nTexto...\nPOR QUE IMPORTA?\nImpacto..."} />
               </label>
               <div>
                 <label className="mt-4 block text-sm font-semibold">Data da edição
@@ -396,11 +444,18 @@ export default function PanoramaAdminPreview({ initialData }: { initialData?: Ed
                 </label>
                 <p className="mt-4 rounded-xl bg-[#edf3f8] p-4 text-xs leading-relaxed text-[#5b7589]">Todas as notícias importadas recebem a data escolhida. Ela poderá ser editada individualmente antes da publicação.</p>
                 
-                <button type="button" disabled={!rawText.trim() || !importDate} onClick={analyzeImport} className={primary + " mt-3 w-full disabled:cursor-not-allowed disabled:opacity-40"}>Organizar notícias para revisão →</button>
+                <button type="button" disabled={!rawText.trim() || !importDate} onClick={analyzeImport} className={primary + " mt-3 w-full disabled:cursor-not-allowed disabled:opacity-40"}>Organizar notícias, agenda e análise →</button>
               </div>
             </div>
           </section>
 
+          {pendingSections && editionHasContent(pendingSections) ? (
+            <div className="rounded-2xl border border-[#d8dfeb] bg-[#f0f6fb] p-5 text-sm leading-relaxed text-[#295574]">
+              <strong>Complementos identificados:</strong> {pendingSections.agenda_items.length} itens da Agenda do Investidor
+              {pendingSections.commentary_body ? " e A Visão do Comentarista (" + pendingSections.commentary_title + ")." : "."}
+              Serão salvos como rascunho junto das notícias e poderão ser editados na revisão.
+            </div>
+          ) : null}
           {drafts.length ? (
             <section className={panel + " p-5 md:p-7"}>
               <div className="flex flex-wrap items-center justify-between gap-4">
@@ -501,13 +556,17 @@ export default function PanoramaAdminPreview({ initialData }: { initialData?: Ed
                 ))}
               </div>
 
+              <EditionExtrasEditor key={reviewDate} day={reviewDate}
+                saved={editions.find((item) => item.published_on === reviewDate) || emptyEditionExtras(reviewDate)}
+                onSaved={(item) => setEditions((current) => [...current.filter((value) => value.published_on !== item.published_on), item])} />
               <div className="mt-7 rounded-xl border border-[#d6e2eb] bg-[#f3f8fb] p-5">
                 <p className="text-sm leading-relaxed text-[#416278]">
                   <strong>Publicação definitiva:</strong> esta ação tornará públicas todas as notícias que ainda estão em rascunho
                   nesta data. Nada é publicado automaticamente ao colar ou salvar o texto.
                 </p>
                 <div className="mt-4 flex flex-wrap items-center gap-3">
-                  <button type="button" disabled={publishing || busy || !editionPosts.some((post) => post.status === "Rascunho")}
+                  <button type="button" disabled={publishing || busy || (!editionPosts.some((post) => post.status === "Rascunho") &&
+                    !editions.some((item) => item.published_on === reviewDate && item.status === "draft" && editionHasContent(item)))}
                     onClick={() => void publishEdition()}
                     className={primary + " disabled:cursor-not-allowed disabled:opacity-40"}>
                     {publishing ? "Publicando edição…" : "Aprovar e publicar edição de " + formatEditorialDate(reviewDate)}

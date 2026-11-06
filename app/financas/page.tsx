@@ -7,9 +7,35 @@ import type { EditorialState } from "@/lib/panorama/editorial-client";
 
 export const dynamic = "force-dynamic";
 
+const panoramaTitle = "Panorama 360° — Robson Santiago";
+const panoramaDescription = "Brasil, mundo, economia e política. A notícia, o contexto e o que realmente importa.";
+
 export const metadata: Metadata = {
-  title: "Panorama 360° — Robson Santiago",
-  description: "Brasil, mundo, economia e política. A notícia, o contexto e o que realmente importa.",
+  metadataBase: new URL("https://www.robsonsantiago.com.br"),
+  title: panoramaTitle,
+  description: panoramaDescription,
+  alternates: { canonical: "/financas" },
+  openGraph: {
+    title: panoramaTitle,
+    description: panoramaDescription,
+    siteName: "Robson Santiago",
+    url: "/financas",
+    type: "website",
+    locale: "pt_BR",
+    images: [{
+      url: "/financas/opengraph-image",
+      width: 1200,
+      height: 630,
+      alt: "Panorama 360° — Brasil, Mundo, Economia e Política",
+      type: "image/png",
+    }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: panoramaTitle,
+    description: panoramaDescription,
+    images: ["/financas/opengraph-image"],
+  },
   robots: process.env.VERCEL_ENV === "production"
     ? { index: true, follow: true }
     : { index: false, follow: false },

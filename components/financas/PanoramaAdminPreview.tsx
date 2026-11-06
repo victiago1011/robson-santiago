@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
+import MarketThermometerEditor from "@/components/financas/MarketThermometerEditor";
 import {
   formatEditorialDate,
   parsePanoramaText,
@@ -11,8 +12,8 @@ import {
   type EditorialState,
 } from "@/lib/panorama/editorial-client";
 
-type View = "visao" | "importar" | "publicacoes" | "categorias";
-type ImportDraft = EditorialPost & { selected: boolean };
+type View = "visao" | "importar" | "publicacoes" | "categorias" | "termometro";
+type ImportDraft = EditorialPost & { selected: boolean; duplicate: boolean };
 const overline = "text-[0.7rem] font-bold uppercase tracking-[0.15em]";
 const panel = "rounded-2xl border border-[#dfe6eb] bg-white shadow-[0_8px_24px_rgba(7,28,48,0.035)]";
 const field = "mt-1.5 w-full rounded-lg border border-[#cbd7e1] bg-white px-3 py-2.5 text-sm text-[#19364d] outline-offset-2 focus-visible:outline-[#b98a3e]";
@@ -144,14 +145,22 @@ export default function PanoramaAdminPreview({ initialData }: { initialData?: Ed
 
   function analyzeImport() {
     const output = parsePanoramaText(rawText, importDate, data.categories);
-    setDrafts(output.map((post) => ({ ...post, selected: true })));
+    const existing = new Set(data.posts.map((post) => post.publishedAt + "|" + post.title.trim().toLocaleLowerCase("pt-BR")));
+    const duplicateCount = output.filter((post) => existing.has(post.publishedAt + "|" + post.title.trim().toLocaleLowerCase("pt-BR"))).length;
+    setDrafts(output.map((post) => ({
+      ...post,
+      selected: !existing.has(post.publishedAt + "|" + post.title.trim().toLocaleLowerCase("pt-BR")),
+      duplicate: existing.has(post.publishedAt + "|" + post.title.trim().toLocaleLowerCase("pt-BR")),
+    })));
     setNotice(output.length
-      ? output.length + " notícia(s) identificada(s). Confira títulos, textos, categorias e fatos antes de salvar."
+      ? output.length + " notícia(s) identificada(s). " + (duplicateCount
+        ? duplicateCount + " já cadastrada(s) nesta data foram desmarcadas para evitar duplicação. "
+        : "") + "Revise antes de salvar."
       : "Não encontrei notícias numeradas. Use títulos como '1. Título da notícia', separados por linhas.");
   }
 
   function updateDraft(id: string, next: EditorialPost) {
-    setDrafts((prev) => prev.map((draft) => draft.id === id ? { ...next, selected: draft.selected } : draft));
+    setDrafts((prev) => prev.map((draft) => draft.id === id ? { ...next, selected: draft.selected, duplicate: draft.duplicate } : draft));
   }
 
   async function persist(next: typeof data): Promise<boolean> {
@@ -165,12 +174,12 @@ export default function PanoramaAdminPreview({ initialData }: { initialData?: Ed
   }
 
   async function commitImport(status: EditorialPost["status"]) {
-    const chosen = drafts.filter((draft) => draft.selected && draft.title.trim() && draft.content.trim());
+    const chosen = drafts.filter((draft) => draft.selected && !draft.duplicate && draft.title.trim() && draft.content.trim());
     if (!chosen.length) {
       setNotice("Selecione ao menos uma notícia com título e texto para continuar.");
       return;
     }
-    const posts = chosen.map(({ selected: _selected, ...post }) => ({ ...post, status }));
+    const posts = chosen.map(({ selected: _selected, duplicate: _duplicate, ...post }) => ({ ...post, status }));
     if (!await persist({ ...data, posts: [...posts, ...data.posts] })) return;
     setDrafts([]);
     setRawText("");
@@ -269,6 +278,7 @@ export default function PanoramaAdminPreview({ initialData }: { initialData?: Ed
           ["importar", "Importar notícias em lote"],
           ["publicacoes", "Publicações"],
           ["categorias", "Categorias"],
+          ["termometro", "Termômetro econômico"],
         ] as const).map(([id, label]) => (
           <button key={id} type="button" onClick={() => goTo(id)}
             className={"shrink-0 rounded-xl px-4 py-3 text-sm font-semibold transition " + (view === id ? "bg-[#092b49] text-white" : "bg-white text-[#526b80] hover:bg-[#edf3f7]")}>{label}</button>
@@ -276,6 +286,8 @@ export default function PanoramaAdminPreview({ initialData }: { initialData?: Ed
       </div>
 
       {notice ? <p role="status" className="rounded-xl border border-[#cfe2d7] bg-[#f0f8f3] p-4 text-sm font-semibold text-[#2e6f4b]">{notice}</p> : null}
+
+      {view === "termometro" ? <MarketThermometerEditor /> : null}
 
       {view === "visao" ? (
         <>
@@ -327,14 +339,34 @@ export default function PanoramaAdminPreview({ initialData }: { initialData?: Ed
         <div className="space-y-6">
           <section className={panel + " p-5 md:p-7"}>
             <p className={overline + " text-[#a47c39]"}>Publicação em lote</p>
-            <h2 className="mt-2 text-2xl font-extrabold">Cole a edição completa do Panorama</h2>
-            <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[#667b8e]">Use o texto que o Robson já prepara. O importador reconhece matérias que começam por “1. Título”, “2. Título” e assim por diante, além de seções como Brasil, Mundo e “Por que importa?”. Não é necessário preencher um formulário por notícia.</p>
+            <h2 className="mt-2 text-2xl font-extrabold">Importe a edição completa do Panorama</h2>
+            <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[#667b8e]">Cole o texto ou selecione um arquivo .txt. O importador reconhece matérias que começam por “1. Título”, “2. Título” e assim por diante, além de seções como Brasil, Mundo e “Por que importa?”. Não é necessário preencher um formulário por notícia.</p>
             <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
               <label className="block text-sm font-semibold">Texto completo
                 <textarea value={rawText} onChange={(e) => { setRawText(e.target.value); setDrafts([]); }} rows={13} className={field + " font-mono text-xs leading-relaxed"} placeholder={"Cole aqui o PANORAMA 360° completo...\n\n🇧🇷 BRASIL — ECONOMIA E POLÍTICA\n1. Título da notícia\nTexto...\nPOR QUE IMPORTA?\nImpacto..."} />
               </label>
               <div>
-                <label className="block text-sm font-semibold">Data das notícias
+                <label className="block text-sm font-semibold">Ou selecione um arquivo .txt
+                  <input type="file" accept=".txt,text/plain" className={field}
+                    onChange={async (event) => {
+                      const file = event.target.files?.[0];
+                      if (!file) return;
+                      event.target.value = "";
+                      if (!file.name.toLowerCase().endsWith(".txt") || file.size > 256_000) {
+                        setNotice("Selecione um arquivo .txt de até 256 KB.");
+                        return;
+                      }
+                      try {
+                        const text = await file.text();
+                        setRawText(text);
+                        setDrafts([]);
+                        setNotice("Arquivo " + file.name + " carregado. Confira a data antes de separar as notícias.");
+                      } catch {
+                        setNotice("Não foi possível ler o arquivo selecionado.");
+                      }
+                    }} />
+                </label>
+                <label className="mt-4 block text-sm font-semibold">Data das notícias
                   <input type="date" value={importDate} onChange={(e) => setImportDate(e.target.value)} className={field} />
                 </label>
                 <p className="mt-4 rounded-xl bg-[#edf3f8] p-4 text-xs leading-relaxed text-[#5b7589]">Todas as notícias importadas recebem a data escolhida. Ela poderá ser editada individualmente antes da publicação.</p>
@@ -353,7 +385,7 @@ export default function PanoramaAdminPreview({ initialData }: { initialData?: Ed
                   <p className="mt-2 text-sm text-[#647a8d]">{selectedCount} selecionada(s). Abra cada matéria para conferir título, texto, impacto e categoria.</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <button type="button" onClick={() => setDrafts(drafts.map((draft) => ({ ...draft, selected: true })))} className={secondary}>Selecionar todas</button>
+                  <button type="button" onClick={() => setDrafts(drafts.map((draft) => ({ ...draft, selected: !draft.duplicate })))} className={secondary}>Selecionar todas</button>
                   <button type="button" onClick={() => setDrafts(drafts.map((draft) => ({ ...draft, selected: false })))} className={secondary}>Desmarcar</button>
                 </div>
               </div>
@@ -362,9 +394,9 @@ export default function PanoramaAdminPreview({ initialData }: { initialData?: Ed
                   <div key={draft.id} className="overflow-hidden rounded-xl border border-[#dce5ed] bg-[#fcfdff]">
                     <div className="flex items-start gap-3 p-4">
                       <input type="checkbox" className="mt-1 h-4 w-4 accent-[#0b2a45]" aria-label={"Selecionar notícia " + (index + 1)}
-                        checked={draft.selected} onChange={(e) => setDrafts(drafts.map((entry) => entry.id === draft.id ? { ...entry, selected: e.target.checked } : entry))} />
+                        checked={draft.selected} disabled={draft.duplicate} onChange={(e) => setDrafts(drafts.map((entry) => entry.id === draft.id ? { ...entry, selected: e.target.checked } : entry))} />
                       <details className="min-w-0 flex-1">
-                        <summary className="cursor-pointer text-sm font-bold leading-relaxed">{String(index + 1).padStart(2, "0")} • {draft.title} <span className="ml-2 text-xs font-normal text-[#7690a3]">(abrir e revisar)</span></summary>
+                        <summary className="cursor-pointer text-sm font-bold leading-relaxed">{String(index + 1).padStart(2, "0")} • {draft.title} <span className="ml-2 text-xs font-normal text-[#7690a3]">{draft.duplicate ? "(já cadastrada — não será importada novamente)" : "(abrir e revisar)"}</span></summary>
                         <div className="mt-5 border-t border-[#e2e9ef] pt-5">
                           <FormFields value={draft} categories={data.categories} onChange={(next) => updateDraft(draft.id, next)} />
                         </div>

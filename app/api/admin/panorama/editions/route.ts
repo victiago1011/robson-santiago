@@ -10,9 +10,16 @@ const agendaItemSchema = z.object({
   text: z.string().trim().min(1).max(500),
   on: z.iso.date().nullable(),
 }).strict();
+const historicalEventSchema = z.object({
+  year: z.string().trim().regex(/^[0-9]{1,4}$/, "Informe o ano do acontecimento."),
+  title: z.string().trim().min(5).max(180),
+  description: z.string().trim().max(1800),
+  source: z.string().trim().max(1000),
+}).strict();
 const editionSchema = z.object({
   published_on: z.iso.date(),
   agenda_items: z.array(agendaItemSchema).max(30),
+  historical_events: z.array(historicalEventSchema).max(30),
   commentary_title: z.string().trim().max(240),
   commentary_body: z.string().trim().max(30000),
 }).strict();
@@ -55,7 +62,7 @@ export async function PUT(request: NextRequest) {
   }
   const parsed = editionSchema.safeParse(input);
   if (!parsed.success) return NextResponse.json({
-    error: "Revise a agenda, a data e o texto do comentarista (máx. 30 mil caracteres).",
+    error: "Revise os marcos históricos, a data e a análise do comentarista.",
   }, { status: 422 });
 
   try {
@@ -69,6 +76,6 @@ export async function PUT(request: NextRequest) {
     if (error) throw error;
     return NextResponse.json({ ok: true });
   } catch {
-    return NextResponse.json({ error: "Não foi possível salvar a agenda e a análise." }, { status: 503 });
+    return NextResponse.json({ error: "Não foi possível salvar os marcos históricos e a análise." }, { status: 503 });
   }
 }

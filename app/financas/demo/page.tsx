@@ -53,6 +53,10 @@ const posts: EditorialPost[] = examples.map(([categoryId, title, summary, publis
 const previewData: EditorialState = { categories, posts };
 const previewEditional: EditionExtras[] = [{
   published_on: "2026-11-05",
+  historical_events: [
+    { year: "1900", title: "Marco histórico fictício da demonstração", description: "Este é um exemplo visual, não um acontecimento histórico real.", source: "Conteúdo ilustrativo" },
+    { year: "2000", title: "Segundo exemplo de uma efeméride", description: "O administrador cadastrará fatos reais e verificados para cada edição.", source: "Conteúdo ilustrativo" },
+  ],
   agenda_items: [
     { text: "Acompanhar o próximo comunicado de política monetária", on: null },
     { text: "Observar os próximos resultados financeiros de empresas de tecnologia", on: null },

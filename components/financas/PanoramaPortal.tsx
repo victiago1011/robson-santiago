@@ -17,6 +17,7 @@ import {
   publishedDays,
   shortEditionDate,
   topicSymbol,
+  uniqueTopicSources,
 } from "@/lib/panorama/daily-editions";
 
 const overline = "text-[0.69rem] font-extrabold uppercase tracking-[0.15em]";
@@ -159,7 +160,7 @@ export default function PanoramaPortal({ initialData, initialIndicators = [] }: 
               </div>
               <div className="mx-auto max-w-[840px] space-y-5 px-6 py-9 text-base leading-[1.9] text-[#324a5f] sm:px-10 md:px-14 md:py-12">
                 {selected.content.split(/\n\s*\n/).filter(Boolean).map((paragraph, index) => <p key={index} className="whitespace-pre-line">{paragraph}</p>)}
-                {selected.impact ? (
+                {selected.showImpact && selected.impact.trim() ? (
                   <section className="mt-9 rounded-xl border-l-4 border-[#d6a751] bg-[#edf4fa] p-5 sm:p-7">
                     <p className={overline + " text-[#9b732f]"}>Por que importa?</p>
                     <p className="mt-3 whitespace-pre-line text-base font-medium leading-relaxed text-[#203b53]">{selected.impact}</p>
@@ -338,23 +339,20 @@ export default function PanoramaPortal({ initialData, initialIndicators = [] }: 
                                       <span aria-hidden="true" className="shrink-0 text-lg text-[#3e6c8a]">{expanded ? "−" : "+"}</span>
                                     </span>
                                   </button>
-                                  <p className="mt-2 text-sm leading-relaxed text-[#647d90]">{post.summary}</p>
+                                  {post.summary.trim() && !(expanded && post.content.trimStart().startsWith(post.summary.trim())) ? (
+                                    <p className="mt-2 text-sm leading-relaxed text-[#647d90]">{post.summary}</p>
+                                  ) : null}
                                   {expanded ? (
                                     <div className="mt-5 space-y-4 text-[0.94rem] leading-[1.85] text-[#314b61]">
                                       {post.content.split(/\n\s*\n/).filter(Boolean).map((paragraph, pIndex) => (
                                         <p key={pIndex} className="whitespace-pre-line">{paragraph}</p>
                                       ))}
-                                      {post.impact ? (
+                                      {post.showImpact && post.impact.trim() ? (
                                         <div className="rounded-xl border-l-4 border-[#d6aa59] bg-[#eff5f9] p-5">
                                           <p className={overline + " text-[#956d2b]"}>Por que importa?</p>
                                           <p className="mt-2 whitespace-pre-line leading-relaxed text-[#203b53]">{post.impact}</p>
                                         </div>
                                       ) : null}
-                                      <p className="text-xs leading-relaxed text-[#798b9b]">Fonte: {post.source || "Panorama 360°"}</p>
-                                      <button type="button" onClick={() => openPost(post)}
-                                        className="inline-flex min-h-10 items-center text-sm font-bold text-[#215f88] underline-offset-4 hover:underline">
-                                        Abrir e compartilhar esta notícia ↗
-                                      </button>
                                     </div>
                                   ) : (
                                     <button type="button" onClick={() => togglePost(post.id)}
@@ -368,6 +366,16 @@ export default function PanoramaPortal({ initialData, initialIndicators = [] }: 
                           );
                         })}
                       </ol>
+                      {uniqueTopicSources(topic.posts).length > 0 ? (
+                        <footer className="border-t border-[#e1e8ee] bg-[#f5f8fa] px-5 py-5 sm:px-8">
+                          <p className={overline + " text-[#6a8396]"}>Fontes informadas para {topic.name}</p>
+                          <ul className="mt-2 space-y-1.5 text-xs leading-relaxed text-[#647b8d]">
+                            {uniqueTopicSources(topic.posts).map((source) => (
+                              <li key={source} className="break-words">{source}</li>
+                            ))}
+                          </ul>
+                        </footer>
+                      ) : null}
                     </section>
                   ))}
                 </div>

@@ -13,7 +13,7 @@ export function emptyEditionExtras(day: string): EditionExtras {
 
 export function editionHasContent(value: EditionExtras) {
   return value.agenda_items.some((item) => item.text.trim())
-    || !!value.commentary_title.trim() || !!value.commentary_body.trim();
+    || !!value.commentary_body.trim();
 }
 
 export function formattedAgendaDay(on: string) {

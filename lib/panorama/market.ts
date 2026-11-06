@@ -1,5 +1,5 @@
 export const MARKET_SLUGS = [
-  "ibovespa", "dolar", "euro", "selic", "bitcoin", "ouro", "inflacao",
+  "ibovespa", "dolar", "euro", "selic", "bitcoin", "ouro", "inflacao", "nasdaq", "sp500", "dowjones",
 ] as const;
 
 export type MarketSlug = (typeof MARKET_SLUGS)[number];

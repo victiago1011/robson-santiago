@@ -30,6 +30,7 @@ export default async function FinancasPage() {
         summary: post.summary,
         content: post.content,
         impact: post.impact,
+        showImpact: post.show_impact,
         publishedAt: post.published_on,
         source: post.source,
         status: "Publicado" as const,

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import PanoramaPortal from "@/components/financas/PanoramaPortal";
 import type { EditorialPost, EditorialState } from "@/lib/panorama/editorial-client";
+import type { EditionExtras } from "@/lib/panorama/edition-extras";
 
 export const metadata: Metadata = {
   title: "Prévia da organização por assuntos — Panorama 360°",
@@ -50,6 +51,18 @@ const posts: EditorialPost[] = examples.map(([categoryId, title, summary, publis
 }));
 
 const previewData: EditorialState = { categories, posts };
+const previewEditional: EditionExtras[] = [{
+  published_on: "2026-11-05",
+  agenda_items: [
+    { text: "Acompanhar o próximo comunicado de política monetária", on: null },
+    { text: "Observar os próximos resultados financeiros de empresas de tecnologia", on: null },
+    { text: "Revisar os indicadores de inflação divulgados no período", on: null },
+  ],
+  commentary_title: "Confiança e planejamento diante das incertezas",
+  commentary_body: "Esta é uma análise fictícia criada apenas para demonstrar a aparência da seção editorial. O Robson poderá escrever uma reflexão própria para encerrar cada edição.\\n\\nNa versão oficial, este texto será exibido somente depois da revisão e da publicação pelo administrador.",
+  status: "published",
+}];
+
 
 export default function PanoramaGroupedDemoPage() {
   return (
@@ -61,7 +74,7 @@ export default function PanoramaGroupedDemoPage() {
           Ir para o Panorama oficial ↗
         </Link>
       </div>
-      <PanoramaPortal initialData={previewData} />
+      <PanoramaPortal initialData={previewData} initialEditions={previewEditional} />
     </>
   );
 }

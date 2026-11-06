@@ -72,6 +72,7 @@ export async function PUT(request: NextRequest) {
     const labels: Record<(typeof MARKET_SLUGS)[number], string> = {
       ibovespa: "Ibovespa", dolar: "Dólar", euro: "Euro", selic: "Selic",
       bitcoin: "Bitcoin", ouro: "Ouro", inflacao: "Inflação (IPCA)",
+      nasdaq: "Nasdaq Composite", sp500: "S&P 500", dowjones: "Dow Jones",
     };
     const rows = result.data.indicators.map((item) => ({
       ...item,

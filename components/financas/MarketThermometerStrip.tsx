@@ -14,7 +14,7 @@ export default function MarketThermometerStrip({ indicators }: { indicators: rea
           <span className="text-[0.7rem] text-[#6c8194]">Dados informados manualmente • Não são cotações ao vivo</span>
         </div>
         {visible.length ? (
-          <div className="-mx-5 flex snap-x gap-3 overflow-x-auto px-5 pb-2 md:mx-0 md:grid md:grid-cols-3 md:px-0 lg:grid-cols-7">
+          <div className="-mx-5 flex snap-x gap-3 overflow-x-auto px-5 pb-2 md:mx-0 md:grid md:grid-cols-3 md:px-0 lg:grid-cols-5">
             {visible.map((item) => {
               const movement = marketMovement(item.direction);
               return (

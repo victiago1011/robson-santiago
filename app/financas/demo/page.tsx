@@ -45,6 +45,7 @@ const posts: EditorialPost[] = examples.map(([categoryId, title, summary, publis
   featured: index === 0 || index === 6 || index === 9,
   content: "Este é um texto exclusivamente ilustrativo para demonstrar como as notícias aparecem dentro de cada assunto. Não representa uma notícia verificada.\n\nNa versão definitiva, este espaço exibirá o texto publicado pelo Robson pelo painel administrativo.",
   impact: "Na versão definitiva, o Robson poderá acrescentar aqui sua explicação sobre por que esse tema importa para o leitor.",
+  showImpact: true,
   source: "Conteúdo fictício de demonstração visual",
 }));
 

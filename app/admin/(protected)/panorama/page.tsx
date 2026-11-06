@@ -2,6 +2,8 @@ import { Suspense } from "react";
 import PanoramaAdminPreview from "@/components/financas/PanoramaAdminPreview";
 import { requireAdminPage } from "@/lib/admin/guard";
 import { readPanoramaData } from "@/lib/panorama/store";
+import { readEditionExtras } from "@/lib/panorama/edition-store";
+import type { EditionExtras } from "@/lib/panorama/edition-extras";
 import type { EditorialState } from "@/lib/panorama/editorial-client";
 
 export const dynamic = "force-dynamic";
@@ -10,8 +12,10 @@ async function PanoramaPanelContent() {
   if (!(await requireAdminPage())) return null;
 
   let initialData: EditorialState | undefined;
+  let initialEditions: EditionExtras[] = [];
   try {
-    const rows = await readPanoramaData(true);
+    const [rows, editions] = await Promise.all([readPanoramaData(true), readEditionExtras(true)]);
+    initialEditions = editions;
     initialData = {
       categories: rows.categories,
       posts: rows.posts.map((post) => ({
@@ -31,7 +35,7 @@ async function PanoramaPanelContent() {
   } catch {
     // The editor falls back to its authenticated API with a retry control.
   }
-  return <PanoramaAdminPreview initialData={initialData} />;
+  return <PanoramaAdminPreview initialData={initialData} initialEditions={initialEditions} />;
 }
 
 export default function AdminPanoramaPage() {

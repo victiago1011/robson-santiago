@@ -11,7 +11,7 @@ import {
 import { selectMinuteBriefing } from "@/lib/panorama/briefing";
 import MarketThermometerStrip from "@/components/financas/MarketThermometerStrip";
 import TopicIcon from "@/components/financas/TopicIcon";
-import type { MarketIndicator } from "@/lib/panorama/market";
+import type { MarketSnapshot } from "@/lib/panorama/market-store";
 import type { EditionExtras } from "@/lib/panorama/edition-extras";
 import EditionExtrasPublic from "@/components/financas/EditionExtrasPublic";
 import {
@@ -26,10 +26,10 @@ const overline = "text-[0.69rem] font-extrabold uppercase tracking-[0.15em]";
 const surface = "rounded-2xl border border-[#dce5ed] bg-white shadow-[0_12px_36px_rgba(11,36,60,0.035)]";
 
 export default function PanoramaPortal({
-  initialData, initialIndicators = [], initialEditions = [],
+  initialData, initialSnapshots = [], initialEditions = [],
 }: {
   initialData?: EditorialState;
-  initialIndicators?: MarketIndicator[];
+  initialSnapshots?: MarketSnapshot[];
   initialEditions?: EditionExtras[];
 }) {
   const { data, loading, error, reload } = usePanoramaContent(initialData);
@@ -57,6 +57,9 @@ export default function PanoramaPortal({
   const dailyBriefing = useMemo(() => selectMinuteBriefing(dailyPosts), [dailyPosts]);
   const selected = data.posts.find((post) => post.status === "Publicado" && post.id === activeId) || null;
   const editionExtras = initialEditions.find((entry) => entry.published_on === day);
+  const editionSnapshots = initialSnapshots.filter((item) => item.edition_on === day);
+  const hasHistorical = Boolean(editionExtras?.status === "published"
+    && editionExtras.historical_events.some((item) => item.title.trim()));
   const total = dailyPosts.length;
   const visibleTopics = chosenTopic === "all" ? topics : topics.filter((topic) => topic.id === chosenTopic);
 
@@ -135,7 +138,6 @@ export default function PanoramaPortal({
         </div>
       </section>
 
-      <MarketThermometerStrip indicators={initialIndicators} />
 
       <div className="mx-auto max-w-[1230px] px-5 pb-16 pt-9 md:px-8 md:pt-12">
         {loading ? (
@@ -186,7 +188,7 @@ export default function PanoramaPortal({
                 <div>
                   <p className={overline + " text-[#a78245]"}>Panorama diário</p>
                   <h2 className="mt-2 text-2xl font-extrabold tracking-tight md:text-3xl">Escolha o dia</h2>
-                  <p className="mt-1 text-sm text-[#667f93]">Uma edição por data. Todas as notícias daquele dia reunidas por assunto.</p>
+                  <p className="mt-1 text-sm text-[#667f93]">Selecione a edição: termômetro, notícias, marcos históricos e análise mudam com a data.</p>
                 </div>
                 <span className="rounded-full bg-[#ecf2f7] px-3 py-1.5 text-xs font-semibold text-[#507086]">
                   {days.length} {days.length === 1 ? "dia publicado" : "dias publicados"}
@@ -220,12 +222,23 @@ export default function PanoramaPortal({
                   </h2>
                   <p className="mt-2 text-sm text-[#6a8093]">{total} {total === 1 ? "notícia" : "notícias"} • {topics.length} {topics.length === 1 ? "assunto" : "assuntos"}</p>
                 </div>
-                <button type="button" onClick={() => chooseTopic("all")}
-                  className="inline-flex min-h-11 items-center rounded-xl border border-[#b4cad9] bg-white px-5 text-sm font-bold text-[#1a527b] transition hover:bg-[#e9f1f8]">
-                  Ler a edição completa ↓
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => chooseTopic("all")}
+                    className="inline-flex min-h-11 items-center rounded-xl border border-[#b4cad9] bg-white px-5 text-sm font-bold text-[#1a527b] transition hover:bg-[#e9f1f8]">
+                    Ler a edição completa ↓
+                  </button>
+                  {hasHistorical ? (
+                    <a href="#marcos-historicos"
+                      className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#dfbd72] bg-[#fff8e6] px-5 text-sm font-extrabold text-[#84621f] transition hover:bg-[#ffedbb]">
+                      📜 Ver marcos históricos desta data ↓
+                    </a>
+                  ) : null}
+                </div>
               </div>
             </section>
+            <div className="mt-6">
+              <MarketThermometerStrip indicators={editionSnapshots} />
+            </div>
 
             {dailyBriefing ? (
               <section aria-labelledby="minute-briefing-title" className="mt-7 overflow-hidden rounded-2xl border border-[#294d6c] bg-[#0a2b49] text-white shadow-[0_20px_50px_rgba(9,42,70,0.12)]">

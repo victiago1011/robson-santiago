@@ -28,7 +28,8 @@ const requestSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("category:delete"), id: z.uuid() }).strict(),
   z.object({ type: z.literal("post:upsert"), post: postSchema }).strict(),
   z.object({ type: z.literal("post:delete"), id: z.uuid() }).strict(),
-  z.object({ type: z.literal("posts:create"), posts: z.array(postSchema).min(1).max(40) }).strict(),
+  z.object({ type: z.literal("posts:create"), posts: z.array(postSchema.extend({ status: z.literal("draft") })).min(1).max(40) }).strict(),
+  z.object({ type: z.literal("edition:publish"), date: z.iso.date() }).strict(),
 ]);
 
 function forbidden(access: Awaited<ReturnType<typeof resolveAdminAccess>>) {
@@ -98,10 +99,23 @@ export async function POST(request: NextRequest) {
     } else if (input.type === "post:delete") {
       ({ error } = await supabase.from("panorama_posts").delete().eq("id", input.id));
     } else if (input.type === "posts:create") {
+      // Bulk imports can never bypass editorial review.
       ({ error } = await supabase.from("panorama_posts").insert(input.posts.map((post) => ({
         ...post,
         updated_at: new Date().toISOString(),
       }))));
+    } else if (input.type === "edition:publish") {
+      // One atomic PostgREST UPDATE for the draft portion of a single dated edition.
+      const { data: publishedRows, error: publishError } = await supabase
+        .from("panorama_posts")
+        .update({ status: "published", updated_at: new Date().toISOString() })
+        .eq("published_on", input.date)
+        .eq("status", "draft")
+        .select("id");
+      if (publishError) {
+        return NextResponse.json({ error: "Não foi possível publicar a edição. Tente novamente." }, { status: 503 });
+      }
+      return NextResponse.json({ ok: true, published: publishedRows?.length ?? 0 });
     }
     if (error) {
       const status = error.code === "23505" || error.code === "23503" ? 409 : 422;

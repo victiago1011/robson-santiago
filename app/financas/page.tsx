@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import PanoramaPortal from "@/components/financas/PanoramaPortal";
 import { readPanoramaData } from "@/lib/panorama/store";
+import { readMarketIndicators } from "@/lib/panorama/market-store";
+import type { MarketIndicator } from "@/lib/panorama/market";
 import type { EditorialState } from "@/lib/panorama/editorial-client";
 
 export const dynamic = "force-dynamic";
@@ -15,8 +17,10 @@ export const metadata: Metadata = {
 
 export default async function FinancasPage() {
   let initialData: EditorialState | undefined;
+  let indicators: MarketIndicator[] = [];
   try {
-    const result = await readPanoramaData(false);
+    const [result, market] = await Promise.all([readPanoramaData(false), readMarketIndicators(false)]);
+    indicators = market;
     initialData = {
       categories: result.categories,
       posts: result.posts.map((post) => ({
@@ -35,5 +39,5 @@ export default async function FinancasPage() {
   } catch {
     // The client shows an error and supports retry if the database is offline.
   }
-  return <PanoramaPortal initialData={initialData} />;
+  return <PanoramaPortal initialData={initialData} initialIndicators={indicators} />;
 }

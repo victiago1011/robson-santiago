@@ -66,7 +66,7 @@ export function topicSymbol(name: string): string {
   const label = name.toLocaleLowerCase("pt-BR");
   if (label.includes("brasil")) return "🇧🇷";
   if (label.includes("mundo") || label.includes("internacional") || label.includes("geopolítica")) return "🌎";
-  if (label.includes("santa catarina") || label.includes("região sul")) return "📍";
+  if (label.includes("santa catarina") || label === "sc") return "SC";
   if (label.includes("economia") || label.includes("finança") || label.includes("mercado")) return "📈";
   if (label.includes("política")) return "🏛️";
   if (label.includes("tecnologia") || label.includes("inteligência artificial")) return "💻";

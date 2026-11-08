@@ -2,7 +2,7 @@ import type { MarketSlug } from "@/lib/panorama/market";
 
 type IconProps = { slug: MarketSlug; size?: "sm" | "md" };
 
-const palette: Record<MarketSlug, string> = {
+const palette: Record<string, string> = {
   ibovespa: "border-[#cce2ee] bg-[#e5f3fa] text-[#20668b]",
   dolar: "border-[#cce9da] bg-[#eaf6ee] text-[#287b54]",
   euro: "border-[#d6dff1] bg-[#edf1fb] text-[#3c5f9d]",
@@ -53,7 +53,7 @@ function MarketGlyph({ slug }: { slug: MarketSlug }) {
 export default function MarketIndicatorIcon({ slug, size = "sm" }: IconProps) {
   return (
     <span aria-hidden="true" className={
-      "inline-flex shrink-0 items-center justify-center rounded-xl border " + palette[slug]
+      "inline-flex shrink-0 items-center justify-center rounded-xl border " + (palette[slug] ?? "border-[#d5e2e9] bg-[#eef4f7] text-[#416782]")
       + (size === "md" ? " h-12 w-12" : " h-9 w-9")
     }>
       <MarketGlyph slug={slug} />

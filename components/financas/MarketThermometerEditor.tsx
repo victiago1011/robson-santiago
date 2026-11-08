@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import MarketIndicatorIcon from "@/components/financas/MarketIndicatorIcon";
 import {
-  MARKET_SLUGS,
+  indicatorMatches,
   marketDate,
   marketMovement,
   type MarketIndicator,
@@ -20,6 +20,11 @@ export default function MarketThermometerEditor({ dates = [] }: { dates?: string
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
   const [failed, setFailed] = useState(false);
+  const [newIndicator, setNewIndicator] = useState("");
+  const [catalogBusy, setCatalogBusy] = useState(false);
+  const [catalogNotice, setCatalogNotice] = useState("");
+  const [editingSlug, setEditingSlug] = useState<string | null>(null);
+  const [editedName, setEditedName] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -43,6 +48,75 @@ export default function MarketThermometerEditor({ dates = [] }: { dates?: string
   function update(slug: string, patch: Partial<MarketIndicator>) {
     setNotice("");
     setItems((current) => current.map((item) => item.slug === slug ? { ...item, ...patch } : item));
+  }
+
+  async function createIndicator() {
+    if (catalogBusy) return;
+    const name = newIndicator.trim();
+    if (name.length < 2 || name.length > 48) {
+      setCatalogNotice("Informe um nome entre 2 e 48 caracteres.");
+      return;
+    }
+    const already = items.find((item) => indicatorMatches(item.label, name));
+    if (already) {
+      setCatalogNotice("O indicador “" + already.label + "” já existe. Use Editar nome no card dele.");
+      setEditingSlug(already.slug);
+      setEditedName(already.label);
+      document.getElementById("market-" + already.slug)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    setCatalogBusy(true);
+    setCatalogNotice("");
+    try {
+      const response = await fetch("/api/admin/panorama/market/catalog", {
+        method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const data = await response.json() as { error?: string; existing?: string; slug?: string; label?: string };
+      if (!response.ok) {
+        if (data.existing) {
+          const matching = items.find((item) => item.slug === data.existing);
+          if (matching) { setEditingSlug(matching.slug); setEditedName(matching.label); }
+        }
+        throw new Error(data.error || "Não foi possível cadastrar.");
+      }
+      const slug = data.slug!;
+      setItems((current) => [...current, {
+        slug, label: data.label || name,
+        display_order: Math.max(0, ...current.map((item) => item.display_order)) + 1,
+        display_value: "", variation: "", direction: "flat", reference_on: null, visible: false,
+      }]);
+      setNewIndicator("");
+      setCatalogNotice("Indicador “" + name + "” criado com ícone genérico. Preencha os valores para a edição selecionada.");
+    } catch (err) {
+      setCatalogNotice(err instanceof Error ? err.message : "Erro ao cadastrar.");
+    } finally { setCatalogBusy(false); }
+  }
+
+  async function renameIndicator(slug: string) {
+    if (catalogBusy) return;
+    const name = editedName.trim();
+    if (name.length < 2 || name.length > 48) {
+      setCatalogNotice("O nome deve ter de 2 a 48 caracteres.");
+      return;
+    }
+    setCatalogBusy(true);
+    setCatalogNotice("");
+    try {
+      const response = await fetch("/api/admin/panorama/market/catalog", {
+        method: "PATCH", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug, name }),
+      });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(result.error || "Não foi possível editar.");
+      setItems((current) => current.map((item) => item.slug === slug ? { ...item, label: name } : item));
+      setEditingSlug(null);
+      setCatalogNotice("Nome atualizado no catálogo e no histórico de todas as edições.");
+    } catch (err) {
+      setCatalogNotice(err instanceof Error ? err.message : "Falha ao renomear.");
+    } finally { setCatalogBusy(false); }
   }
 
   async function save() {
@@ -92,6 +166,31 @@ export default function MarketThermometerEditor({ dates = [] }: { dates?: string
         </p>
       </header>
 
+      <section className="rounded-2xl border border-[#dce5ed] bg-white p-5 md:p-6">
+        <p className="text-xs font-extrabold uppercase tracking-[0.12em] text-[#a17a3e]">Catálogo de indicadores</p>
+        <h3 className="mt-2 text-xl font-extrabold text-[#143853]">+ Criar indicador personalizado</h3>
+        <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[#667d90]">
+          Cadastre novos indicadores sem modificar os existentes. Nomes repetidos são bloqueados;
+          cada novo indicador recebe um ícone genérico e começa oculto em todas as edições.
+          Para alterar um nome, use “Editar nome” no card.
+        </p>
+        <form className="mt-4 flex flex-wrap items-end gap-3" onSubmit={(event) => {
+          event.preventDefault(); void createIndicator();
+        }}>
+          <label className="min-w-[220px] max-w-md flex-1 text-sm font-bold text-[#3a5970]">
+            Nome do indicador
+            <input className={field} value={newIndicator} maxLength={48}
+              onChange={(event) => { setNewIndicator(event.target.value); setCatalogNotice(""); }}
+              placeholder="Ex.: Petróleo Brent" />
+          </label>
+          <button disabled={catalogBusy} type="submit"
+            className="min-h-11 rounded-xl bg-[#0b2a45] px-5 py-3 text-sm font-bold text-white hover:bg-[#1b4b6d] disabled:opacity-40">
+            {catalogBusy ? "Salvando..." : "Adicionar indicador"}
+          </button>
+        </form>
+        {catalogNotice ? <p role="status" className="mt-4 rounded-lg bg-[#f0f5f9] px-4 py-3 text-sm font-semibold text-[#315b78]">{catalogNotice}</p> : null}
+      </section>
+
       <div className="rounded-2xl border border-[#dce5ed] bg-[#edf4f9] p-5">
         <label className="block max-w-xs text-sm font-extrabold text-[#244b66]">
           📅 Data da edição que você está editando
@@ -111,13 +210,27 @@ export default function MarketThermometerEditor({ dates = [] }: { dates?: string
         {items.map((item) => {
           const movement = marketMovement(item.direction);
           return (
-            <div key={item.slug} className="rounded-2xl border border-[#dce5ed] bg-white p-5 md:p-6">
+            <div id={"market-" + item.slug} key={item.slug} className="scroll-mt-8 rounded-2xl border border-[#dce5ed] bg-white p-5 md:p-6">
               <div className="mb-5 flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
                   <MarketIndicatorIcon slug={item.slug} size="md" />
                   <div>
                     <p className="text-xs font-bold uppercase tracking-[0.1em] text-[#718699]">Indicador</p>
-                    <h3 className="mt-1 text-xl font-extrabold text-[#102f4b]">{item.label}</h3>
+                    {editingSlug === item.slug ? (
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <input autoFocus aria-label="Novo nome do indicador" className={field}
+                          maxLength={48} value={editedName} onChange={(event) => setEditedName(event.target.value)} />
+                        <button type="button" disabled={catalogBusy} onClick={() => void renameIndicator(item.slug)}
+                          className="rounded-lg bg-[#0b2a45] px-3 py-2 text-xs font-bold text-white">Salvar nome</button>
+                        <button type="button" onClick={() => setEditingSlug(null)} className="rounded-lg border px-3 py-2 text-xs">Cancelar</button>
+                      </div>
+                    ) : (
+                      <div className="mt-1">
+                        <h3 className="text-xl font-extrabold text-[#102f4b]">{item.label}</h3>
+                        <button type="button" onClick={() => { setEditingSlug(item.slug); setEditedName(item.label); setCatalogNotice(""); }}
+                          className="mt-1 text-xs font-bold text-[#2a6389] hover:underline">Editar nome</button>
+                      </div>
+                    )}
                   </div>
                 </div>
                 <label className="flex items-center gap-2 text-xs font-bold text-[#31546e]">
@@ -166,9 +279,9 @@ export default function MarketThermometerEditor({ dates = [] }: { dates?: string
       </div>
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-[#dce5ed] bg-white p-5">
         <p className="text-sm text-[#647a8e]">
-          {items.filter((item) => item.visible).length} de {MARKET_SLUGS.length} indicadores selecionados para exibição.
+          {items.filter((item) => item.visible).length} de {items.length} indicadores selecionados para exibição.
         </p>
-        <button disabled={saving || items.length !== MARKET_SLUGS.length} type="button" onClick={() => void save()}
+        <button disabled={saving || !items.length} type="button" onClick={() => void save()}
           className="min-h-11 rounded-xl bg-[#0b2a45] px-6 py-3 text-sm font-bold text-white hover:bg-[#1c4c70] disabled:opacity-50">
           {saving ? "Salvando…" : "Salvar termômetro econômico"}
         </button>

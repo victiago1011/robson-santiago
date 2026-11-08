@@ -2,7 +2,18 @@ export const MARKET_SLUGS = [
   "ibovespa", "dolar", "euro", "selic", "bitcoin", "ouro", "inflacao", "nasdaq", "sp500", "dowjones",
 ] as const;
 
-export type MarketSlug = (typeof MARKET_SLUGS)[number];
+export type BuiltinMarketSlug = (typeof MARKET_SLUGS)[number];
+export type MarketSlug = string;
+
+/** Stable lowercase ASCII identifier; the label remains freely editable. */
+export function indicatorSlug(name: string) {
+  return name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+    .trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48);
+}
+
+export function indicatorMatches(a: string, b: string) {
+  return indicatorSlug(a) === indicatorSlug(b);
+}
 export type MarketDirection = "up" | "down" | "flat";
 
 export type MarketIndicator = {

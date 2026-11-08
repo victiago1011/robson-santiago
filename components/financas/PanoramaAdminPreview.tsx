@@ -15,7 +15,7 @@ import {
   type EditorialState,
 } from "@/lib/panorama/editorial-client";
 
-type View = "visao" | "importar" | "publicacoes" | "categorias" | "termometro";
+type View = "visao" | "importar" | "publicacoes" | "categorias" | "termometro" | "analise";
 type ImportDraft = EditorialPost & { selected: boolean; duplicate: boolean };
 const overline = "text-[0.7rem] font-bold uppercase tracking-[0.15em]";
 const panel = "rounded-2xl border border-[#dfe6eb] bg-white shadow-[0_8px_24px_rgba(7,28,48,0.035)]";
@@ -137,6 +137,11 @@ export default function PanoramaAdminPreview({ initialData, initialEditions = []
   const [postQuery, setPostQuery] = useState("");
   const [postStatus, setPostStatus] = useState("Todos");
   const [reviewDate, setReviewDate] = useState<string | null>(null);
+  const [editorialDay, setEditorialDay] = useState(() => {
+    const days = [...(initialData?.posts.map((post) => post.publishedAt) ?? []),
+      ...initialEditions.map((edition) => edition.published_on)];
+    return days.sort((a, b) => b.localeCompare(a))[0] || todayInBrazil();
+  });
   const [publishing, setPublishing] = useState(false);
 
   const noticeIsError = /^(Confira|Não|Falha|Erro|Selecione|Digite|Nome inválido|Serviço|Conflito|Acesso|Campos inválidos)/i.test(notice);
@@ -374,6 +379,7 @@ export default function PanoramaAdminPreview({ initialData, initialEditions = []
           ["publicacoes", "Publicações"],
           ["categorias", "Categorias"],
           ["termometro", "Termômetro econômico"],
+          ["analise", "Análise e marcos históricos"],
         ] as const).map(([id, label]) => (
           <button key={id} type="button" onClick={() => goTo(id)}
             className={"shrink-0 rounded-xl px-4 py-3 text-sm font-semibold transition " + (view === id ? "bg-[#092b49] text-white" : "bg-white text-[#526b80] hover:bg-[#edf3f7]")}>{label}</button>
@@ -383,6 +389,47 @@ export default function PanoramaAdminPreview({ initialData, initialEditions = []
       {notice ? <p role={noticeIsError ? "alert" : "status"} className={"rounded-xl border p-4 text-sm font-semibold " + (noticeIsError ? "border-[#e8c7c0] bg-[#fff2ef] text-[#913d31]" : "border-[#cfe2d7] bg-[#f0f8f3] text-[#2e6f4b]")}>{notice}</p> : null}
 
       {view === "termometro" ? <MarketThermometerEditor dates={[...new Set([...data.posts.map((post) => post.publishedAt), ...editions.map((edition) => edition.published_on)])].sort((a, b) => b.localeCompare(a))} /> : null}
+
+      {view === "analise" ? (
+        <section className="space-y-6">
+          <header className={panel + " p-5 md:p-7"}>
+            <p className={overline + " text-[#a17a3e]"}>Conteúdos por data</p>
+            <h2 className="mt-2 text-2xl font-extrabold text-[#143853]">✍️ A Visão do Comentarista</h2>
+            <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[#607b8f]">
+              Aqui o Robson edita a análise que encerra a edição e os marcos históricos.
+              Se a análise estiver no texto completo colado, o importador a separa automaticamente como
+              rascunho. Também é possível escrever ou corrigir tudo manualmente aqui.
+            </p>
+            <div className="mt-5 flex flex-wrap items-end gap-3">
+              <label className="min-w-[230px] text-sm font-bold text-[#315a77]">
+                📅 Data da edição
+                <input type="date" className={field} value={editorialDay}
+                  onChange={(event) => setEditorialDay(event.target.value)} />
+              </label>
+              <button type="button" className={secondary}
+                onClick={() => { setReviewDate(editorialDay); setView("publicacoes"); setNotice(""); }}>
+                Revisar e publicar esta edição →
+              </button>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {[...new Set([...data.posts.map((post) => post.publishedAt),
+                ...editions.map((edition) => edition.published_on)])].sort((a, b) => b.localeCompare(a)).slice(0, 12).map((day) => (
+                <button type="button" key={day} onClick={() => setEditorialDay(day)}
+                  className={"rounded-lg border px-3 py-2 text-xs font-semibold " +
+                    (day === editorialDay ? "border-[#0b2a45] bg-[#0b2a45] text-white" :
+                      "border-[#cbd8e1] bg-white text-[#315d7d]")}>
+                  {formatEditorialDate(day)}
+                </button>
+              ))}
+            </div>
+          </header>
+          <EditionExtrasEditor key={editorialDay} day={editorialDay}
+            saved={editions.find((item) => item.published_on === editorialDay)}
+            onSaved={(item) => setEditions((current) => [
+              ...current.filter((value) => value.published_on !== item.published_on), item,
+            ])} />
+        </section>
+      ) : null}
 
       {view === "visao" ? (
         <>

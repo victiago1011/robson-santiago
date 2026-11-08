@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { resolveAdminAccess } from "@/lib/admin/guard";
 import { readMarketIndicators, readMarketSnapshots } from "@/lib/panorama/market-store";
-import { MARKET_SLUGS } from "@/lib/panorama/market";
+
 import { getSupabase } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 const editable = z.object({
-  slug: z.enum(MARKET_SLUGS),
+  slug: z.string().regex(/^[a-z][a-z0-9-]{1,47}$/),
   display_value: z.string().trim().max(48),
   variation: z.string().trim().max(32),
   direction: z.enum(["up", "down", "flat"]),
@@ -19,9 +19,9 @@ const editable = z.object({
   "Preencha valor e data antes de publicar um indicador.",
 );
 
-const payload = z.object({ edition_on: z.iso.date(), indicators: z.array(editable).length(MARKET_SLUGS.length) }).strict().refine(
-  (data) => new Set(data.indicators.map((row) => row.slug)).size === MARKET_SLUGS.length,
-  "Todos os indicadores precisam estar presentes uma única vez.",
+const payload = z.object({ edition_on: z.iso.date(), indicators: z.array(editable).min(1).max(100) }).strict().refine(
+  (data) => new Set(data.indicators.map((row) => row.slug)).size === data.indicators.length,
+  "Indicadores duplicados no envio.",
 );
 
 async function checkAccess() {
@@ -85,16 +85,18 @@ export async function PUT(request: NextRequest) {
     const supabase = getSupabase();
     // Fixed labels/order are defined server-side; the browser controls only
     // the value, movement and publication toggle. One atomic upsert.
-    const labels: Record<(typeof MARKET_SLUGS)[number], string> = {
-      ibovespa: "Ibovespa", dolar: "Dólar", euro: "Euro", selic: "Selic",
-      bitcoin: "Bitcoin", ouro: "Ouro", inflacao: "Inflação (IPCA)",
-      nasdaq: "Nasdaq Composite", sp500: "S&P 500", dowjones: "Dow Jones",
-    };
+    const { data: catalog, error: catalogError } = await supabase.from("panorama_market_indicators")
+      .select("slug,label,display_order");
+    if (catalogError || !catalog) throw catalogError || new Error("Catálogo indisponível");
+    const catalogBySlug = new Map(catalog.map((row) => [row.slug, row]));
+    if (result.data.indicators.some((item) => !catalogBySlug.has(item.slug))) {
+      return NextResponse.json({ error: "Indicador não encontrado. Atualize a página." }, { status: 422 });
+    }
     const rows = result.data.indicators.map((item) => ({
       edition_on: result.data.edition_on,
       ...item,
-      label: labels[item.slug],
-      display_order: MARKET_SLUGS.indexOf(item.slug) + 1,
+      label: catalogBySlug.get(item.slug)!.label,
+      display_order: catalogBySlug.get(item.slug)!.display_order,
       updated_at: new Date().toISOString(),
     }));
     const { error } = await supabase.from("panorama_market_snapshots").upsert(rows, { onConflict: "edition_on,slug" });

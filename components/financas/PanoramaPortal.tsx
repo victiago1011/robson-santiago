@@ -163,7 +163,6 @@ export default function PanoramaPortal({
                   <time dateTime={selected.publishedAt}>{formatEditorialDate(selected.publishedAt)}</time>
                 </div>
                 <h2 className="mt-5 text-3xl font-extrabold leading-tight tracking-tight md:text-5xl">{selected.title}</h2>
-                <p className="mt-5 max-w-[720px] text-base leading-relaxed text-[#62798b] md:text-lg">{selected.summary}</p>
                 <div className="mt-7 flex flex-wrap items-center justify-between gap-3 text-xs text-[#708398]">
                   <span>Panorama 360° • Robson Santiago</span>
                   <button type="button" onClick={sharePost} className="rounded-lg border border-[#cbd9e6] bg-[#f7fafd] px-4 py-2.5 font-semibold text-[#24577e] hover:bg-[#e9f3fa]">Compartilhar notícia ↗</button>
@@ -362,7 +361,7 @@ export default function PanoramaPortal({
                                       <span aria-hidden="true" className="shrink-0 text-lg text-[#3e6c8a]">{expanded ? "−" : "+"}</span>
                                     </span>
                                   </button>
-                                  {post.summary.trim() && !(expanded && post.content.trimStart().startsWith(post.summary.trim())) ? (
+                                  {!expanded && post.summary.trim() ? (
                                     <p className="mt-2 text-sm leading-relaxed text-[#647d90]">{post.summary}</p>
                                   ) : null}
                                   {expanded ? (

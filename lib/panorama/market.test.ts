@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { indicatorsForEdition, marketDate, marketMovement, publishedMarketIndicators, MARKET_SLUGS, type MarketIndicator } from "./market";
+import { indicatorMatches, indicatorSlug, indicatorsForEdition, marketDate, marketMovement, publishedMarketIndicators, MARKET_SLUGS, type MarketIndicator } from "./market";
 
 function example(slug: MarketIndicator["slug"], values: Partial<MarketIndicator> = {}): MarketIndicator {
   return { slug, label: slug, display_order: MARKET_SLUGS.indexOf(slug)+1, display_value: "123",
@@ -33,4 +33,15 @@ test("clicar em outra data altera o termômetro e nunca usa cotação de outro d
   assert.deepEqual(indicatorsForEdition(snapshots, "2026-11-05").map((item) => item.display_value), ["166.191"]);
   assert.deepEqual(indicatorsForEdition(snapshots, "2026-11-06").map((item) => item.display_value), ["168.003", "R$ 5,42"]);
   assert.deepEqual(indicatorsForEdition(snapshots, "2026-11-04"), []);
+});
+
+test("indicadores personalizados usam slug estável e impedem nomes duplicados", () => {
+  assert.equal(indicatorSlug("Petróleo Brent"), "petroleo-brent");
+  assert.equal(indicatorSlug(" Dólar "), "dolar");
+  assert.equal(indicatorMatches("PETRÓLEO Brent", "Petroleo-brent"), true);
+  assert.equal(indicatorMatches("Ouro", "Ibovespa"), false);
+  const custom = example("petroleo-brent", {
+    label: "Petróleo Brent", display_value: "US$ 65,90", visible: true,
+  });
+  assert.deepEqual(publishedMarketIndicators([custom]).map((x) => x.slug), ["petroleo-brent"]);
 });

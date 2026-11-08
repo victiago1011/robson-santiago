@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
+import { ROBSON_PANORAMA_PROMPT } from "@/lib/panorama/editorial-prompt";
 import MarketThermometerEditor from "@/components/financas/MarketThermometerEditor";
 import EditionExtrasEditor from "@/components/financas/EditionExtrasEditor";
 import { parseCompleteEdition } from "@/lib/panorama/complete-edition-parser";
@@ -68,8 +69,8 @@ function FormFields({
           <input required type="date" className={field} value={value.publishedAt} onChange={(e) => update({ publishedAt: e.target.value })} />
         </label>
       </div>
-      <label className="block text-sm font-semibold">Resumo para o card
-        <textarea className={field} rows={2} value={value.summary} onChange={(e) => update({ summary: e.target.value })} placeholder="Uma ou duas frases para atrair a leitura" />
+      <label className="block text-sm font-semibold">Prévia curta (somente quando a notícia estiver recolhida)
+        <textarea className={field} rows={2} value={value.summary} onChange={(e) => update({ summary: e.target.value })} placeholder="Primeira informação da notícia (a prévia desaparece na leitura completa)" />
       </label>
       <label className="block text-sm font-semibold">Texto completo
         <textarea required className={field} rows={6} value={value.content} onChange={(e) => update({ content: e.target.value })} placeholder="Escreva a análise, com parágrafos separados por uma linha..." />
@@ -434,7 +435,28 @@ export default function PanoramaAdminPreview({ initialData, initialEditions = []
           <section className={panel + " p-5 md:p-7"}>
             <p className={overline + " text-[#a47c39]"}>Publicação em lote</p>
             <h2 className="mt-2 text-2xl font-extrabold">Escreva ou cole a edição completa</h2>
-            <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[#667b8e]">Escreva ou cole o texto do Panorama neste campo. O sistema reconhece matérias que começam por “1. Título”, “2. Título” e assim por diante, além de seções como Brasil, Mundo e “Por que importa?”. O sistema também separa a Agenda do Investidor e a Análise do Comentarista, sem tratá-las como notícias.</p>
+            <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[#667b8e]">
+              Escreva ou cole o texto da edição no formato estruturado: matérias numeradas, categorias, “Por que importa?” opcional e, ao final, a análise do comentarista quando houver. O resumo é apenas uma prévia: ao abrir a notícia, o texto completo aparece sem repetição.
+            </p>
+            <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-[#c8ddeb] bg-[#f1f7fb] p-4">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-bold text-[#193f5c]">O Robson prepara o Panorama pelo ChatGPT Plus?</p>
+                <p className="mt-1 text-xs leading-relaxed text-[#5f798c]">
+                  Use o prompt editorial padronizado para gerar a edição sem repetição, com fontes verificáveis, numeração e categorias reconhecidas pelo importador.
+                </p>
+              </div>
+              <button type="button" className={secondary}
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(ROBSON_PANORAMA_PROMPT);
+                    setNotice("Prompt editorial copiado! Cole no ChatGPT Plus do Robson e envie a data e as notícias.");
+                  } catch {
+                    setNotice("Não foi possível copiar o prompt automaticamente. Verifique a permissão de área de transferência do navegador.");
+                  }
+                }}>
+                📋 Copiar prompt para o ChatGPT Plus
+              </button>
+            </div>
             <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
               <label className="block text-sm font-semibold">Escreva ou cole o Panorama completo
                 <textarea value={rawText} onChange={(e) => { setRawText(e.target.value); setDrafts([]); setPendingSections(null); }} rows={13} className={field + " font-mono text-xs leading-relaxed"} placeholder={"Cole aqui o PANORAMA 360° completo...\n\n🇧🇷 BRASIL — ECONOMIA E POLÍTICA\n1. Título da notícia\nTexto...\nPOR QUE IMPORTA?\nImpacto..."} />

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import PanoramaPortal from "@/components/financas/PanoramaPortal";
+import PanoramaTextPortal from "@/components/financas/PanoramaTextPortal";
+import { readPublicTextEditions, type PublicTextEdition } from "@/lib/panorama/plain-edition-store";
 import { readPanoramaData } from "@/lib/panorama/store";
 import { readMarketSnapshots, type MarketSnapshot } from "@/lib/panorama/market-store";
 import { readEditionExtras } from "@/lib/panorama/edition-store";
@@ -43,13 +44,14 @@ export const metadata: Metadata = {
 };
 
 export default async function FinancasPage() {
-  let initialData: EditorialState | undefined;
+  let initialData: EditorialState = { categories: [], posts: [] };
   let snapshots: MarketSnapshot[] = [];
   let editions: EditionExtras[] = [];
+  let textEditions: PublicTextEdition[] = [];
+
+  // Preserve all previously published dates when moving to the simplified editor.
   try {
-    const [result, marketSnapshots, publishedEditions] = await Promise.all([readPanoramaData(false), readMarketSnapshots(false), readEditionExtras(false)]);
-    snapshots = marketSnapshots;
-    editions = publishedEditions;
+    const result = await readPanoramaData(false);
     initialData = {
       categories: result.categories,
       posts: result.posts.map((post) => ({
@@ -67,7 +69,11 @@ export default async function FinancasPage() {
       })),
     };
   } catch {
-    // The client shows an error and supports retry if the database is offline.
+    // The older archive is optional and never blocks the new editions.
   }
-  return <PanoramaPortal initialData={initialData} initialSnapshots={snapshots} initialEditions={editions} />;
+  try { snapshots = await readMarketSnapshots(false); } catch { /* Legacy fallback only. */ }
+  try { editions = await readEditionExtras(false); } catch { /* Legacy fallback only. */ }
+  try { textEditions = await readPublicTextEditions(); } catch { /* Site remains readable during migration. */ }
+  return <PanoramaTextPortal textEditions={textEditions} legacyData={initialData}
+    legacyExtras={editions} legacySnapshots={snapshots} />;
 }

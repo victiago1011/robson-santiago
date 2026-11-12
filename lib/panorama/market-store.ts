@@ -2,12 +2,13 @@ import "server-only";
 
 import { getSupabase } from "@/lib/supabase/server";
 import type { MarketIndicator } from "@/lib/panorama/market";
+import { panoramaOldestVisibleDay } from "@/lib/panorama/retention";
 
 export async function readMarketIndicators(admin: boolean): Promise<MarketIndicator[]> {
   let query = getSupabase()
     .from("panorama_market_indicators")
     .select("slug,label,display_value,variation,direction,reference_on,visible,display_order");
-  if (!admin) query = query.eq("visible", true);
+  if (!admin) query = query.eq("visible", true).gte("reference_on", panoramaOldestVisibleDay());
   const { data, error } = await query.order("display_order", { ascending: true });
   if (error) throw error;
   return (data || []) as MarketIndicator[];
@@ -20,7 +21,7 @@ export async function readMarketSnapshots(admin: boolean): Promise<MarketSnapsho
   for (let offset = 0; offset < 3000; offset += 300) {
     let query = getSupabase().from("panorama_market_snapshots")
       .select("edition_on,slug,label,display_value,variation,direction,reference_on,visible,display_order");
-    if (!admin) query = query.eq("visible", true);
+    if (!admin) query = query.eq("visible", true).gte("edition_on", panoramaOldestVisibleDay());
     const { data, error } = await query.order("edition_on", { ascending: false })
       .order("display_order", { ascending: true }).range(offset, offset + 299);
     if (error) throw error;

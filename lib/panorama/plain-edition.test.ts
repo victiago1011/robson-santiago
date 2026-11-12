@@ -39,7 +39,7 @@ test("item 16 também é separado; listas numeradas dentro da análise são pres
     "1. Política fiscal.", "2. Crédito.", "⸻", "Fontes editoriais: imprensa."].join("\n");
   const r = parsePanoramaEdition(text);
   assert.equal(r.date, "2026-11-11");
-  assert.equal(r.opening?.title, "O BRASIL ENTRE OS JUROS E O MERCADO");
+  assert.equal(r.opening?.title, "ABERTURA DO DIA — O BRASIL ENTRE OS JUROS E O MERCADO");
   assert.equal(r.news.length, 1);
   assert.equal(r.commentary?.number, 16);
   assert.match(r.commentary?.body || "", /2. Crédito/);

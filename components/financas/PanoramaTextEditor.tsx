@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { editionDateFromText, parsePanoramaEdition } from "@/lib/panorama/plain-edition";
+import { TextThermometer } from "@/components/financas/PanoramaTextPortal";
 import type { TextEdition } from "@/lib/panorama/plain-edition-store";
 
 function brazilToday() {
@@ -159,7 +160,7 @@ export default function PanoramaTextEditor({ initialEditions }: { initialEdition
             </button>
             {showPreview ? (
               <div className="mt-5 space-y-4">
-                <p className="text-xs text-[#667e92]">O texto não será resumido ou modificado. Esta prévia mostra apenas a separação das seções.</p>
+                <p className="text-xs text-[#667e92]">O texto não será resumido ou modificado. Confira abaixo a organização, os valores do termômetro e os títulos antes de publicar.</p>
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div className="rounded-xl bg-[#f0f5f9] p-4"><p className="text-2xl font-black">{parsed.news.length}</p><p className="text-xs font-semibold text-[#617d92]">Notícias identificadas</p></div>
                   <div className="rounded-xl bg-[#f0f5f9] p-4"><p className="text-2xl font-black">{parsed.thermometer ? "✓" : "—"}</p><p className="text-xs font-semibold text-[#617d92]">Termômetro</p></div>
@@ -167,6 +168,12 @@ export default function PanoramaTextEditor({ initialEditions }: { initialEdition
                 </div>
                 {parsed.date && parsed.date !== date ? <p className="text-sm font-bold text-[#ae523f]">Atenção: a data do texto é {parsed.date}, diferente da selecionada.</p> : null}
                 {parsed.opening ? <p className="rounded-lg bg-[#eff5fa] p-3 text-sm"><strong>📌 Abertura:</strong> {parsed.opening.title}</p> : null}
+                {parsed.thermometer ? (
+                  <div className="min-w-0">
+                    <TextThermometer section={parsed.thermometer} />
+                    <p className="mt-2 text-xs text-[#667e92]">Prévia dos indicadores extraídos do TXT. São os mesmos dados exibidos na página pública após a publicação.</p>
+                  </div>
+                ) : text ? <p className="rounded-lg bg-[#fff5e8] p-4 text-sm text-[#965f22]">O termômetro não foi encontrado no texto. Revise o título “TERMÔMETRO ECONÔMICO”.</p> : null}
                 <ol className="space-y-2">
                   {parsed.news.map((section, index) => <li key={index} className="rounded-lg border border-[#e0e9ef] px-3 py-3 text-sm font-semibold">
                     <span className="mr-2 text-[#ae8139]">{String(index + 1).padStart(2, "0")}</span>{section.icon} {section.title}

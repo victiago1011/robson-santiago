@@ -47,6 +47,7 @@ test("read November 12 style with unlabeled indicators and market reading", () =
    "Leitura dos mercados", "A Bolsa brasileira encerrou o dia em alta."].join("\n");
  const parsed = parseThermometer(body);
  assert.equal(parsed.groups.length, 1);
+ assert.equal(parsed.reference.length, 1);
  assert.equal(parsed.groups[0].metrics.length, 2);
  assert.equal(parsed.groups[0].metrics[0].label, "Ibovespa");
  assert.equal(parsed.hasReading, true);

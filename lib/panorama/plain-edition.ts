@@ -98,15 +98,13 @@ export function parsePanoramaEdition(input: string): ParsedPanorama {
       continue;
     }
 
-    // The second logo/strapline commonly appears just before the sources.
-    if (result.commentary && (/^🌐\s*PANORAMA 360/u.test(line) || /^PANORAMA 360[°º]/.test(line))) {
+    // The repeated masthead at the bottom is not commentary.
+    const isCommentary = Boolean(active && compact(active.title).includes("VISAO DO COMENTARISTA"));
+    if ((isCommentary || result.commentary) && /^(?:🌐\s*)?PANORAMA 360[°º]?/iu.test(line)) {
+      commit();
       continue;
     }
     if (result.commentary && /^(?:BRASIL[,|• ]+MUNDO|A NOTICIA, O CONTEXTO)/.test(upper)) continue;
-    if (result.commentary && !active) {
-      // The commentator's conclusion is not followed by another numbered article.
-      if (!line) continue;
-    }
 
     const numbered = sectionHeader(line);
     const commentaryHeading = numbered

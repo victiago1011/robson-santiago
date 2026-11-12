@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { editionDateFromText, parsePanoramaEdition } from "@/lib/panorama/plain-edition";
-import { TextThermometer } from "@/components/financas/PanoramaTextPortal";
+import PanoramaEditorialReview from "@/components/financas/PanoramaEditorialReview";
+import { parseThermometer } from "@/lib/panorama/thermometer";
 import type { TextEdition } from "@/lib/panorama/plain-edition-store";
 
 function brazilToday() {
@@ -29,16 +30,22 @@ export default function PanoramaTextEditor({ initialEditions, initialLegacyDays 
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [showPreview, setShowPreview] = useState(true);
+  const [requireReading, setRequireReading] = useState(false);
+  const [requireHistory, setRequireHistory] = useState(false);
   const current = editions.find((item) => item.published_on === date);
   const isLegacyOnly = legacyDays.includes(date) && !current;
   const allEditionDays = Array.from(new Set([...editions.map((item) => item.published_on), ...legacyDays])).sort((a, b) => b.localeCompare(a));
   const dirty = text !== savedText;
   const parsed = useMemo(() => parsePanoramaEdition(text), [text]);
+  const marketModel = useMemo(() => parsed.thermometer ? parseThermometer(parsed.thermometer.body) : null, [parsed.thermometer]);
+  const missingRequired = (requireReading && !marketModel?.hasReading) || (requireHistory && !parsed.history?.body.trim());
 
   const selectDate = (day: string) => {
     if (day === date) return;
     if (dirty && !window.confirm("O texto atual tem alterações não salvas. Deseja trocar de data?")) return;
     setDate(day);
+    setRequireReading(false);
+    setRequireHistory(false);
     const found = editions.find((item) => item.published_on === day)?.draft_text || "";
     setText(found);
     setSavedText(found);
@@ -75,6 +82,10 @@ export default function PanoramaTextEditor({ initialEditions, initialLegacyDays 
   };
   const handleAction = async (action: Action) => {
     if (busy) return;
+    if (action === "publish" && missingRequired) {
+      setError("Preencha os itens marcados como obrigatórios na conferência editorial antes de publicar.");
+      return;
+    }
     if (action === "publish" && !window.confirm("Publicar a edição de " + date + " no site? O texto público será substituído pelo rascunho atual.")) return;
     if (action === "unpublish" && !window.confirm("Retirar a edição de " + date + " do site? O rascunho será preservado.")) return;
     setBusy(true);
@@ -184,11 +195,15 @@ export default function PanoramaTextEditor({ initialEditions, initialLegacyDays 
               <span>{text.length.toLocaleString("pt-BR")} caracteres • {new TextEncoder().encode(text).byteLength.toLocaleString("pt-BR")} bytes</span>
               <span>{dirty ? "● Alterações não salvas" : "✓ Texto salvo ou ainda vazio"}</span>
             </div>
+            <PanoramaEditorialReview date={date} text={text} parsed={parsed}
+              onTextChange={receiveText} requireReading={requireReading}
+              onRequireReading={setRequireReading} requireHistory={requireHistory}
+              onRequireHistory={setRequireHistory} />
             {error ? <p role="alert" className="mt-4 rounded-lg border border-[#efb2b2] bg-[#fff2f2] p-4 text-sm font-semibold text-[#9c3131]">{error}</p> : null}
             {message ? <p role="status" className="mt-4 rounded-lg border border-[#b8dfce] bg-[#f2fcf6] p-4 text-sm font-semibold text-[#286648]">{message}</p> : null}
             <div className="mt-6 flex flex-wrap gap-3">
               <button type="button" disabled={busy || !text.trim()} onClick={() => void handleAction("save")} className={secondary}>{busy ? "Salvando…" : "Salvar rascunho"}</button>
-              <button type="button" disabled={busy || !text.trim() || parsed.news.length === 0} onClick={() => void handleAction("publish")} className={primary}>{busy ? "Processando…" : current?.published_text ? "Atualizar publicação" : "Publicar edição"}</button>
+              <button type="button" disabled={busy || !text.trim() || parsed.news.length === 0 || missingRequired} onClick={() => void handleAction("publish")} className={primary}>{busy ? "Processando…" : current?.published_text ? "Atualizar publicação" : "Publicar edição"}</button>
               {current?.published_text ? <button type="button" disabled={busy} onClick={() => void handleAction("unpublish")}
                 className="min-h-11 rounded-xl border border-[#e4c1b7] px-4 text-sm font-semibold text-[#a14837] hover:bg-[#fff4f1]">Retirar do ar</button> : null}
             </div>
@@ -209,17 +224,15 @@ export default function PanoramaTextEditor({ initialEditions, initialLegacyDays 
                 </div>
                 {parsed.date && parsed.date !== date ? <p className="text-sm font-bold text-[#ae523f]">Atenção: a data do texto é {parsed.date}, diferente da selecionada.</p> : null}
                 {parsed.opening ? <p className="rounded-lg bg-[#eff5fa] p-3 text-sm"><strong>📌 Abertura:</strong> {parsed.opening.title}</p> : null}
-                {parsed.thermometer ? (
-                  <div className="min-w-0">
-                    <TextThermometer section={parsed.thermometer} />
-                    <p className="mt-2 text-xs text-[#667e92]">Prévia dos indicadores extraídos do TXT. São os mesmos dados exibidos na página pública após a publicação.</p>
-                  </div>
-                ) : text ? <p className="rounded-lg bg-[#fff5e8] p-4 text-sm text-[#965f22]">O termômetro não foi encontrado no texto. Revise o título “TERMÔMETRO ECONÔMICO”.</p> : null}
+                <p className="rounded-lg bg-[#f0f5f9] p-3 text-xs text-[#5c7c94]">
+                  O termômetro com todos os indicadores e a opção de edição aparece na Conferência da edição, logo acima dos botões de publicação.
+                </p>
                 <ol className="space-y-2">
                   {parsed.news.map((section, index) => <li key={index} className="rounded-lg border border-[#e0e9ef] px-3 py-3 text-sm font-semibold">
                     <span className="mr-2 text-[#ae8139]">{String(index + 1).padStart(2, "0")}</span>{section.icon} {section.title}
                   </li>)}
                 </ol>
+                {parsed.history?.body.trim() ? <p className="rounded-lg border border-[#e0e9ef] px-3 py-3 text-sm font-semibold">📜 Marcos históricos desta data serão destacados em seção própria.</p> : null}
                 {parsed.commentary ? <p className="rounded-lg bg-[#0d2b46] p-4 text-sm font-bold text-white">✍️ Visão do Comentarista será destacada com foto e assinatura de Robson Santiago.</p> : null}
                 {text && !parsed.news.length ? <p className="text-sm text-[#a45b36]">Nenhuma notícia foi identificada. Verifique se os títulos numerados estão em letras maiúsculas como nos arquivos de exemplo.</p> : null}
               </div>

@@ -1,5 +1,6 @@
 import "server-only";
 import { getSupabase } from "@/lib/supabase/server";
+import { panoramaOldestVisibleDay } from "@/lib/panorama/retention";
 
 export type TextEdition = {
   published_on: string;
@@ -22,6 +23,7 @@ export async function readPublicTextEditions(): Promise<PublicTextEdition[]> {
   const response = await getSupabase().from("panorama_text_editions")
     .select("published_on,published_text,published_at")
     .not("published_text", "is", null)
+    .gte("published_on", panoramaOldestVisibleDay())
     .order("published_on", { ascending: false }).limit(500);
   if (response.error) throw response.error;
   return (response.data || []) as PublicTextEdition[];

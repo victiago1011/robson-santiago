@@ -103,7 +103,7 @@ function Commentary({ section }: { section: PanoramaSection }) {
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-4">
-          <Image src="/images/robson/robson-hero.png" alt="Retrato de Robson Santiago"
+          <Image src="/images/robson/robson-comentarista.jpg" alt="Retrato de Robson Santiago"
             width={112} height={112} className="h-24 w-24 rounded-full border-2 border-[#d8b16a] object-cover object-top grayscale sm:h-28 sm:w-28" />
           <div className="md:hidden"><p className="font-bold">Robson Santiago</p><p className="text-xs text-[#bdcfdf]">Comentarista</p></div>
         </div>

@@ -135,7 +135,7 @@ export function parsePanoramaEdition(input: string): ParsedPanorama {
       // The headline immediately below "ABERTURA DO DIA" is part of its title.
       if (compact(active.title) === "ABERTURA DO DIA" && !body.some((item) => item.trim())
           && line.length > 15 && line === line.toLocaleUpperCase("pt-BR")) {
-        active.title = line;
+        active.title = "ABERTURA DO DIA — " + line;
       } else {
         body.push(original);
       }

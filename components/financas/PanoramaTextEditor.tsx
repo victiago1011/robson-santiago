@@ -79,7 +79,7 @@ export default function PanoramaTextEditor({ initialEditions }: { initialEdition
     try {
       if (action === "save" || (action === "publish" && (dirty || !current))) {
         await send("save");
-        setSavedText(text.trim().replace(/\r\n?/g, "\n"));
+        setSavedText(text);
       }
       if (action !== "save") await send(action);
       await refresh();

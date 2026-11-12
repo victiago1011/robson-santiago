@@ -87,7 +87,7 @@ export function parsePanoramaEdition(input: string): ParsedPanorama {
       result.history = active;
     } else if (compact(active.title).includes("TERMOMETRO ECONOMICO")) {
       result.thermometer = active;
-    } else if (compact(active.title).includes("ABERTURA")) {
+    } else if (isOpeningHeading(active.title)) {
       result.opening = active;
     } else {
       result.news.push(active);

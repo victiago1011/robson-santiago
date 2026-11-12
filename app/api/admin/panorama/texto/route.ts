@@ -4,6 +4,7 @@ import { resolveAdminAccess } from "@/lib/admin/guard";
 import { getSupabase } from "@/lib/supabase/server";
 import { parsePanoramaEdition } from "@/lib/panorama/plain-edition";
 import { readTextEditions } from "@/lib/panorama/plain-edition-store";
+import { isPanoramaDateExpired } from "@/lib/panorama/retention";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,7 @@ const inputSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("save"), date: z.iso.date(), text: z.string().min(1).max(100000) }).strict(),
   z.object({ action: z.literal("publish"), date: z.iso.date() }).strict(),
   z.object({ action: z.literal("unpublish"), date: z.iso.date() }).strict(),
+  z.object({ action: z.literal("delete"), date: z.iso.date() }).strict(),
 ]);
 
 async function denied() {
@@ -50,8 +52,17 @@ export async function PUT(request: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: "Confira a data e o texto." }, { status: 422 });
 
   const input = parsed.data;
+  if ((input.action === "save" || input.action === "publish") && isPanoramaDateExpired(input.date)) {
+    return NextResponse.json({ error: "Esta data já ultrapassou os sete dias de retenção. Não é possível salvar ou republicar uma edição vencida." }, { status: 422 });
+  }
   const supabase = getSupabase();
   try {
+    if (input.action === "delete") {
+      // Privileged server-side RPC atomically removes both old and new formats.
+      const { data, error } = await supabase.rpc("panorama_delete_edition", { p_date: input.date });
+      if (error) throw error;
+      return NextResponse.json({ ok: true, deleted: data }, { headers: { "Cache-Control": "no-store" } });
+    }
     const { data: current, error: lookupError } = await supabase
       .from("panorama_text_editions")
       .select("published_on,draft_text")

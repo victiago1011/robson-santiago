@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getSupabase } from "@/lib/supabase/server";
+import { panoramaOldestVisibleDay } from "@/lib/panorama/retention";
 
 export type DbPanoramaCategory = {
   id: string;
@@ -35,7 +36,7 @@ export async function readPanoramaData(admin: boolean) {
     let query = supabase
       .from("panorama_posts")
       .select("id,category_id,title,summary,content,impact,show_impact,source,published_on,status,featured");
-    if (!admin) query = query.eq("status", "published");
+    if (!admin) query = query.eq("status", "published").gte("published_on", panoramaOldestVisibleDay());
     const { data: page, error } = await query
       .order("published_on", { ascending: false })
       .order("created_at", { ascending: false })

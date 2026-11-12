@@ -55,7 +55,7 @@ function TextArticle({ section, index }: { section: PanoramaSection; index: numb
   );
 }
 
-function TextThermometer({ section }: { section: PanoramaSection }) {
+export function TextThermometer({ section }: { section: PanoramaSection }) {
   const lines = section.body.split("\n");
   const readingStart = lines.findIndex((line) => /^(?:🔎\s*)?LEITURA (?:DO|DOS) MERCADOS?/iu.test(line.trim()));
   const list = readingStart < 0 ? lines : lines.slice(0, readingStart);

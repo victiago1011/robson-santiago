@@ -15,6 +15,7 @@ export type ParsedPanorama = {
   thermometer: PanoramaSection | null;
   news: PanoramaSection[];
   commentary: PanoramaSection | null;
+  history: PanoramaSection | null;
   sources: string;
 };
 
@@ -27,6 +28,17 @@ const compact = (value: string) => value.normalize("NFD")
   .replace(/[\u0300-\u036f]/g, "").toLocaleUpperCase("pt-BR").replace(/\s+/g, " ").trim();
 const trimBody = (lines: string[]) => lines.join("\n").trim();
 const separator = /^(?:⸻+|[-—–━─]{3,})$/u;
+
+/** A general history article is NOT the same as events on that calendar date. */
+const isDateMilestones = (title: string) =>
+  /^(?:MARCOS? HISTORICOS? (?:DESTA|DO|DA) DATA|NESTE DIA NA HISTORIA|EFEMERIDES (?:DESTA|DO|DA) DATA|O QUE ACONTECEU NESTE DIA)\b/u
+    .test(compact(title));
+
+const isOpeningHeading = (line: string) => {
+  const title = compact(line.replace(/^[^\p{L}]+/u, ""));
+  return /^ABERTURA(?: DO DIA)?(?:\s*[—–-]\s*.+)?$/u.test(title)
+    || /^(?:O )?RESUMO (?:DO DIA|DA SEMANA) EM (?:60 SEGUNDOS|UM MINUTO)\b/u.test(title);
+};
 
 export function editionDateFromText(input: string): string | null {
   const header = input.slice(0, 1600);
@@ -58,7 +70,7 @@ function trimSignature(value: string) {
 export function parsePanoramaEdition(input: string): ParsedPanorama {
   const result: ParsedPanorama = {
     date: editionDateFromText(input),
-    opening: null, thermometer: null, news: [], commentary: null, sources: "",
+    opening: null, thermometer: null, news: [], commentary: null, history: null, sources: "",
   };
   const normalized = input.replace(/\r\n?/g, "\n").replace(/\uFEFF/g, "");
   let active: PanoramaSection | null = null;
@@ -71,6 +83,8 @@ export function parsePanoramaEdition(input: string): ParsedPanorama {
     if (compact(active.title).includes("VISAO DO COMENTARISTA")) {
       active.body = trimSignature(active.body);
       result.commentary = active;
+    } else if (isDateMilestones(active.title)) {
+      result.history = active;
     } else if (compact(active.title).includes("TERMOMETRO ECONOMICO")) {
       result.thermometer = active;
     } else if (compact(active.title).includes("ABERTURA")) {
@@ -126,9 +140,14 @@ export function parsePanoramaEdition(input: string): ParsedPanorama {
       active = numbered;
       continue;
     }
-    if (/^(?:📌\s*|📰\s*)?ABERTURA(?: DO DIA)?(?:\s*[—–-]\s*.+)?$/iu.test(line)) {
+    if (isDateMilestones(line.replace(/^[^\p{L}]+/u, ""))) {
       commit();
-      active = { number: null, icon: "📌", title: line.replace(/^[📌📰\s]+/gu, ""), body: "" };
+      active = { number: null, icon: "📜", title: line.replace(/^[^\p{L}]+/u, ""), body: "" };
+      continue;
+    }
+    if (isOpeningHeading(line)) {
+      commit();
+      active = { number: null, icon: "📌", title: line.replace(/^[^\p{L}]+/u, ""), body: "" };
       continue;
     }
     if (active) {

@@ -53,3 +53,38 @@ test("data inválida não é aceita e não há conteúdo inventado", () => {
   assert.equal(p.commentary, null);
   assert.equal(p.date, null);
 });
+
+
+test("09/11 weekly brief becomes opening; economic history is regular news", () => {
+ const doc = ["PANORAMA 360°", "ABERTURA DA SEMANA — EDIÇÃO 006",
+  "Segunda-feira, 09 de novembro de 2026", "📰 O RESUMO DA SEMANA EM 60 SEGUNDOS",
+  "O Brasil inicia a semana com dúvidas econômicas.",
+  "⸻", "📊 1. TERMÔMETRO ECONÔMICO",
+  "Referência: fechamento de sexta-feira.",
+  "🇧🇷 BRASIL", "• Dólar: R$ 5,50", "Leitura dos indicadores:",
+  "Juross seguem elevados.", "⸻",
+  "🇧🇷 2. BRASIL — DEBATE FISCAL", "Notícia.",
+  "⸻", "📚 15. HISTÓRIA E MEMÓRIA ECONÔMICA", "Crises entre 2014 e 2016.",
+  "⸻", "✍️ 16. A VISÃO DO COMENTARISTA", "Reflexão do Robson.",
+  "⸻", "FONTES E REFERÊNCIAS", "Jornais."
+ ].join("\n");
+ const p = parsePanoramaEdition(doc);
+ assert.equal(p.opening?.title, "O RESUMO DA SEMANA EM 60 SEGUNDOS");
+ assert.match(p.opening?.body || "", /O Brasil inicia/);
+ assert.equal(p.news.length, 2);
+ assert.equal(p.history, null);
+ assert.equal(p.commentary?.number, 16);
+});
+
+test("historical milestones have a dedicated section only for specific date", () => {
+ const doc = ["Quinta-feira, 12 de novembro de 2026", "📌 ABERTURA DO DIA", "Introdução",
+  "⸻", "📊 1. TERMÔMETRO ECONÔMICO", "Dólar: R$ 5,50", "⸻",
+  "🇧🇷 2. BRASIL — NOTÍCIA", "Notícia.",
+  "⸻", "📜 MARCOS HISTÓRICOS DESTA DATA", "1889 — Fato documentado em fonte editorial.",
+  "⸻", "✍️ 21. A VISÃO DO COMENTARISTA", "Opinião."
+ ].join("\n");
+ const p = parsePanoramaEdition(doc);
+ assert.equal(p.news.length, 1);
+ assert.match(p.history?.body || "", /1889/);
+ assert.equal(p.commentary?.number, 21);
+});

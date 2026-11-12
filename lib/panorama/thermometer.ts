@@ -26,7 +26,7 @@ export function isMarketReadingHeader(value: string): boolean {
 }
 
 const PREFIX_EMOJI = /^((?:[\p{Extended_Pictographic}\p{Regional_Indicator}\uFE0F\u200D]+\s*)*)/u;
-const groupLabels = new Set(["BRASIL", "ESTADOS UNIDOS", "MERCADOS INTERNACIONAIS", "INTERNACIONAL", "EUROPA", "COMMODITIES", "CRIPTOMOEDAS", "CRIPTOS", "ASIA", "OUTROS INDICADORES"]);
+const groupLabels = new Set(["BRASIL", "ESTADOS UNIDOS", "MERCADOS INTERNACIONAIS", "INTERNACIONAL", "EUROPA", "COMMODITIES", "CRIPTOMOEDAS", "CRIPTOS", "ASIA", "OUTROS INDICADORES", "CÂMBIO", "CAMBIO", "JUROS", "BOLSAS", "ENERGIA", "MERCADO INTERNACIONAL", "JUROS E MOEDAS"]);
 
 export function parseThermometer(body: string): ThermometerModel {
   const lines = body.split("\n");
@@ -57,7 +57,7 @@ export function parseThermometer(body: string): ThermometerModel {
       groups.push(current);
       return;
     }
-    if (/^(?:refer[êe]ncia|indicadores?\s*[—-]|dados\s+de)/iu.test(withoutIcon)
+    if (/^(?:refer[êe]ncia\b|indicadores?\b|dados\s+de)/iu.test(withoutIcon)
       || /(?:n[aã]o s[aã]o cota[cç][oõ]es em tempo real|[uú]ltimo fechamento dispon[ií]vel)/iu.test(withoutIcon)) {
       reference.push(line);
       return;

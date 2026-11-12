@@ -1,51 +1,23 @@
 import { Suspense } from "react";
-import PanoramaAdminPreview from "@/components/financas/PanoramaAdminPreview";
+import PanoramaTextEditor from "@/components/financas/PanoramaTextEditor";
 import { requireAdminPage } from "@/lib/admin/guard";
-import { readPanoramaData } from "@/lib/panorama/store";
-import { readEditionExtras } from "@/lib/panorama/edition-store";
-import type { EditionExtras } from "@/lib/panorama/edition-extras";
-import type { EditorialState } from "@/lib/panorama/editorial-client";
+import { readTextEditions } from "@/lib/panorama/plain-edition-store";
 
 export const dynamic = "force-dynamic";
 
 async function PanoramaPanelContent() {
   if (!(await requireAdminPage())) return null;
-
-  let initialData: EditorialState | undefined;
-  let initialEditions: EditionExtras[] = [];
   try {
-    const [rows, editions] = await Promise.all([readPanoramaData(true), readEditionExtras(true)]);
-    initialEditions = editions;
-    initialData = {
-      categories: rows.categories,
-      posts: rows.posts.map((post) => ({
-        id: post.id,
-        title: post.title,
-        categoryId: post.category_id,
-        summary: post.summary,
-        content: post.content,
-        impact: post.impact,
-        showImpact: post.show_impact,
-        source: post.source,
-        publishedAt: post.published_on,
-        status: (post.status === "published" ? "Publicado" : "Rascunho") as "Publicado" | "Rascunho",
-        featured: post.featured,
-      })),
-    };
+    const editions = await readTextEditions();
+    return <PanoramaTextEditor initialEditions={editions} />;
   } catch {
-    // The editor falls back to its authenticated API with a retry control.
+    return <div role="alert" className="rounded-2xl border border-[#e5c9b8] bg-white p-8 text-sm text-[#a2523b]">
+      Não foi possível carregar as edições. Confira a conexão com o banco de dados e recarregue a página.
+    </div>;
   }
-  return <PanoramaAdminPreview initialData={initialData} initialEditions={initialEditions} />;
 }
-
 export default function AdminPanoramaPage() {
-  return (
-    <Suspense fallback={
-      <div role="status" className="rounded-2xl border border-[#dfe6eb] bg-white p-8 text-sm text-[#567186]">
-        Preparando as notícias e categorias…
-      </div>
-    }>
-      <PanoramaPanelContent />
-    </Suspense>
-  );
+  return <Suspense fallback={<div role="status" className="rounded-xl bg-white p-8 text-[#607b90]">Carregando editor…</div>}>
+    <PanoramaPanelContent />
+  </Suspense>;
 }

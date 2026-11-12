@@ -97,6 +97,30 @@ export default function PanoramaEditorialReview({
           </span>
         </label>
       </div>
+      <div className="mt-4">
+        <button type="button" onClick={async () => {
+          const model = [
+            "Organize o texto editorial do PANORAMA 360° sem inventar, resumir ou alterar os fatos, números e opiniões.",
+            "Use títulos consistentes e preserve o número variável de notícias. Separe cada bloco por ⸻.",
+            "Cabeçalho: data completa da edição.",
+            "Abertura: 📌 ABERTURA DO DIA — TÍTULO ou 📰 O RESUMO DA SEMANA EM 60 SEGUNDOS, com o texto abaixo.",
+            "Termômetro: 📊 1. TERMÔMETRO ECONÔMICO. Abaixo, uma linha de referência da cotação; grupos como 🇧🇷 BRASIL, 🇺🇸 ESTADOS UNIDOS e 🌍 COMMODITIES; e indicadores no formato • Indicador: valor e variação.",
+            "Se houver análise dos indicadores, use 🔎 LEITURA DO MERCADO e escreva os parágrafos abaixo. Não invente dados ausentes.",
+            "Notícias: 🇧🇷 2. TÍTULO; 🇺🇸 3. TÍTULO; e assim por diante, sem limitar a quantidade. Preserve 'Por que importa?' quando existir.",
+            "Se houver fatos históricos comprovados ocorridos no próprio dia/mês da edição, acrescente 📜 MARCOS HISTÓRICOS DESTA DATA, com ano, acontecimento e fonte. Não trate história econômica genérica como efeméride.",
+            "Para a opinião final, use ✍️ N. A VISÃO DO COMENTARISTA, onde N é o número correspondente à sequência real. Separe integralmente a opinião de Robson das notícias.",
+            "Finalize com FONTES E REFERÊNCIAS. Preserve emojis úteis e não apresente eventos, cotações ou fontes sem confirmação.",
+          ].join("\n");
+          try {
+            await navigator.clipboard.writeText(model);
+            window.alert("Orientação de títulos copiada. Cole no ChatGPT usado para preparar o texto.");
+          } catch {
+            window.alert("Não foi possível copiar a orientação automaticamente. Confira a permissão da área de transferência.");
+          }
+        }} className="rounded-lg border border-[#c4d5e2] bg-white px-3 py-2 text-xs font-bold text-[#2b5b7b] hover:bg-[#eaf2f8]">
+          Copiar padrão de títulos para o ChatGPT
+        </button>
+      </div>
       <div className="mt-4 flex flex-wrap gap-2">
         {!opening && !parsed.opening ? (
           <button type="button" onClick={() => prependBefore(/^[^\n]*\d{1,3}\.\s+TERMÔMETRO ECONÔMICO\s*$/imu, "📌 ABERTURA DO DIA")}
@@ -106,7 +130,9 @@ export default function PanoramaEditorialReview({
         ) : null}
         {!thermometer?.hasReading && parsed.thermometer ? (
           <button type="button" onClick={() => {
-            onTextChange(updateThermometerBody(text, parsed.thermometer!.body.trimEnd() + "\n\n🔎 LEITURA DO MERCADO\n"));
+            const content = parsed.thermometer!.body.trimEnd() + "\n\n🔎 LEITURA DO MERCADO\n";
+            setDraftThermometer(content);
+            onTextChange(updateThermometerBody(text, content));
             setEditingThermometer(true);
           }} className="rounded-lg border border-[#c4d5e2] bg-white px-3 py-2 text-xs font-bold text-[#2b5b7b] hover:bg-[#eaf2f8]">
             + Inserir título de leitura do mercado

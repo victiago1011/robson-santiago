@@ -10,6 +10,7 @@ import type { EditionExtras } from "@/lib/panorama/edition-extras";
 import type { MarketSnapshot } from "@/lib/panorama/market-store";
 import { indicatorsForEdition } from "@/lib/panorama/market";
 import MarketThermometerStrip from "@/components/financas/MarketThermometerStrip";
+import { parseThermometer } from "@/lib/panorama/thermometer";
 
 const overline = "text-[0.69rem] font-extrabold uppercase tracking-[0.15em]";
 const surface = "rounded-2xl border border-[#dce5ed] bg-white shadow-[0_12px_36px_rgba(11,36,60,0.035)]";
@@ -56,34 +57,58 @@ function TextArticle({ section, index }: { section: PanoramaSection; index: numb
 }
 
 export function TextThermometer({ section }: { section: PanoramaSection }) {
-  const lines = section.body.split("\n");
-  const readingStart = lines.findIndex((line) => /^(?:🔎\s*)?LEITURA (?:DO|DOS) MERCADOS?/iu.test(line.trim()));
-  const list = readingStart < 0 ? lines : lines.slice(0, readingStart);
-  const reading = readingStart < 0 ? "" : lines.slice(readingStart + 1).join("\n").trim();
-  const metrics = list.map((line) => {
-    const match = line.trim().replace(/^\*\s*/, "").match(/^([^:]{2,65}):\s*(.+)$/);
-    return match ? { label: match[1].trim(), value: match[2].trim(), note: "" } :
-      { label: "", value: "", note: line.trim() };
-  }).filter((row) => row.label || row.note);
+  const model = parseThermometer(section.body);
+  const total = model.groups.reduce((n, group) => n + group.metrics.length, 0);
+  if (!total && !model.reading && !model.reference.length && !model.notes.length) return null;
+
   return (
-    <section aria-label="Termômetro econômico" className={surface + " mt-7 p-5 md:p-8"}>
-      <p className={overline + " text-[#ab8342]"}>📊 Indicadores do mercado</p>
-      <h3 className="mt-2 text-2xl font-extrabold text-[#0b2b47]">Termômetro econômico</h3>
-      <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {metrics.map((row, index) => row.label
-          ? <div key={index} className="rounded-xl border border-[#d9e5ef] bg-[#f5f8fb] px-4 py-3">
-              <p className="text-sm font-semibold text-[#526d83]">{row.label}</p>
-              <p className="mt-1 text-lg font-extrabold text-[#0b2b49]">{row.value}</p>
-            </div>
-          : <p key={index} className="col-span-full whitespace-pre-line text-xs font-semibold leading-relaxed text-[#688197]">{row.note}</p>
-        )}
+    <section aria-label="Termômetro econômico" className={surface + " mt-7 overflow-hidden"}>
+      <div className="border-b border-[#e0e8ef] px-5 py-6 sm:px-8">
+        <p className={overline + " text-[#ab8342]"}>📊 Indicadores do mercado</p>
+        <h3 className="mt-2 text-2xl font-extrabold text-[#0b2b47]">Termômetro econômico</h3>
+        {model.reference.length ? (
+          <div className="mt-4 rounded-xl border border-[#e3eaf1] bg-[#f6f9fb] px-4 py-3 text-[0.79rem] leading-relaxed text-[#607a8f]">
+            <span className="font-extrabold text-[#25465e]">Referência: </span>
+            {model.reference.join(" ").replace(/^Refer[êe]ncia:\s*/iu, "")}
+          </div>
+        ) : null}
       </div>
-      {reading ? (
-        <div className="mt-6 border-t border-[#dce7ef] pt-5">
-          <p className={overline + " mb-3 text-[#aa813d]"}>🔎 Leitura do mercado</p>
-          <TextBody value={reading} />
-        </div>
-      ) : null}
+      <div className="space-y-7 p-5 sm:p-8">
+        {model.groups.map((group, index) => (
+          <div key={index}>
+            {group.title ? (
+              <h4 className="mb-3 flex items-center gap-2 border-b border-[#e6edf3] pb-2 text-xs font-extrabold uppercase tracking-[0.10em] text-[#678099]">
+                {group.title}
+              </h4>
+            ) : null}
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {group.metrics.map((item, j) => {
+                const comma = item.value.length > 62 ? item.value.indexOf(", ") : -1;
+                const main = comma >= 0 ? item.value.slice(0, comma) : item.value;
+                const detail = comma >= 0 ? item.value.slice(comma + 2) : "";
+                return <div key={j} className="min-w-0 rounded-xl border border-[#dae6ee] bg-[#f5f8fb] px-4 py-4">
+                  <p className="text-[0.8rem] font-semibold leading-snug text-[#59778e]">
+                    {item.icon ? <span className="mr-1" aria-hidden="true">{item.icon}</span> : null}{item.label}
+                  </p>
+                  <p className="mt-1 break-words text-lg font-extrabold leading-snug text-[#102d47]">{main}</p>
+                  {detail ? <p className="mt-2 text-xs leading-relaxed text-[#70879a]">{detail}</p> : null}
+                </div>;
+              })}
+            </div>
+          </div>
+        ))}
+        {model.notes.length ? (
+          <p className="whitespace-pre-line border-t border-[#e6edf3] pt-4 text-xs leading-relaxed text-[#698197]">
+            {model.notes.join("\n")}
+          </p>
+        ) : null}
+        {model.hasReading ? (
+          <div className="rounded-xl border-l-4 border-[#c9a15a] bg-[#f3f7fa] px-5 py-5 sm:px-7">
+            <h4 className={overline + " mb-3 text-[#a27a39]"}>🔎 Leitura do mercado</h4>
+            <TextBody value={model.reading} />
+          </div>
+        ) : null}
+      </div>
     </section>
   );
 }
@@ -226,6 +251,7 @@ export default function PanoramaTextPortal({
                         <span className="line-clamp-2">{item.title}</span>
                       </a>
                     </li>)}
+                    {parsed?.history?.body.trim() ? <li><a href="#marcos-historicos" className="block border-t border-[#e4ebf1] pt-4 text-xs font-extrabold text-[#9d732f]">📜 Marcos históricos</a></li> : null}
                     {commentary ? <li><a href="#visao-do-comentarista" className="block border-t border-[#e4ebf1] pt-4 text-xs font-extrabold text-[#9d732f]">✍️ Visão do Comentarista</a></li> : null}
                   </ol>
                 </nav>
@@ -237,6 +263,18 @@ export default function PanoramaTextPortal({
                   {news.map((item, index) => <TextArticle key={index} section={item} index={index} />)}
                 </div>
               </div>
+            ) : null}
+            {parsed?.history?.body.trim() ? (
+              <section id="marcos-historicos" className={surface + " mt-9 scroll-mt-6 p-6 sm:p-9"}>
+                <p className={overline + " text-[#b08946]"}>📜 História e contexto</p>
+                <h2 className="mt-3 text-2xl font-extrabold tracking-tight text-[#102d47] sm:text-3xl">
+                  Marcos históricos desta data
+                </h2>
+                <p className="mt-2 text-sm text-[#6b8497]">Acontecimentos registrados na edição de {longEditionDate(day)}.</p>
+                <div className="mt-6 border-t border-[#e2eaf1] pt-6">
+                  <TextBody value={parsed.history.body} />
+                </div>
+              </section>
             ) : null}
             {commentary ? <Commentary section={commentary} /> : null}
             {(parsed?.sources || legacySources) ? (

@@ -19,8 +19,9 @@ const secondary = "inline-flex min-h-11 items-center justify-center rounded-xl b
 
 type Action = "save" | "publish" | "unpublish";
 
-export default function PanoramaTextEditor({ initialEditions }: { initialEditions: TextEdition[] }) {
+export default function PanoramaTextEditor({ initialEditions, initialLegacyDays = [] }: { initialEditions: TextEdition[]; initialLegacyDays?: string[] }) {
   const [editions, setEditions] = useState(initialEditions);
+  const [legacyDays, setLegacyDays] = useState(initialLegacyDays);
   const [date, setDate] = useState(brazilToday);
   const [text, setText] = useState(() => initialEditions.find((item) => item.published_on === brazilToday())?.draft_text || "");
   const [savedText, setSavedText] = useState(text);
@@ -29,6 +30,8 @@ export default function PanoramaTextEditor({ initialEditions }: { initialEdition
   const [error, setError] = useState("");
   const [showPreview, setShowPreview] = useState(true);
   const current = editions.find((item) => item.published_on === date);
+  const isLegacyOnly = legacyDays.includes(date) && !current;
+  const allEditionDays = Array.from(new Set([...editions.map((item) => item.published_on), ...legacyDays])).sort((a, b) => b.localeCompare(a));
   const dirty = text !== savedText;
   const parsed = useMemo(() => parsePanoramaEdition(text), [text]);
 
@@ -96,6 +99,39 @@ export default function PanoramaTextEditor({ initialEditions }: { initialEdition
     }
   };
 
+  const deleteEdition = async (targetDate: string) => {
+    if (busy) return;
+    const formatted = targetDate.split("-").reverse().join("/");
+    if (!window.confirm(
+      "Excluir definitivamente a edição de " + formatted +
+      "?\n\nIsso apaga o TXT, as notícias antigas, o termômetro e as análises dessa data no banco de dados. Essa ação não pode ser desfeita."
+    )) return;
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch("/api/admin/panorama/texto", {
+        method: "PUT",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete", date: targetDate }),
+      });
+      const result = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(result.error || "Não foi possível excluir a edição.");
+      await refresh();
+      setLegacyDays((days) => days.filter((day) => day !== targetDate));
+      if (targetDate === date) {
+        setText("");
+        setSavedText("");
+      }
+      setMessage("A edição de " + formatted + " foi excluída do site e do banco de dados.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível excluir a edição.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const readFile = async (file?: File) => {
     if (!file) return;
     if (file.size > 120000) { setError("O arquivo excede 120 KB."); return; }
@@ -132,6 +168,11 @@ export default function PanoramaTextEditor({ initialEditions }: { initialEdition
               <p className="mt-4 rounded-lg bg-[#edf4fa] px-4 py-3 text-xs font-semibold text-[#3b647e]">
                 Já existe uma edição nessa data. Você está editando o rascunho existente, sem criar notícias duplicadas.
                 {current.published_text ? " A versão publicada só muda quando clicar em Publicar." : ""}
+              </p>
+            ) : null}
+            {isLegacyOnly ? (
+              <p className="mt-4 rounded-lg border border-[#e8d5b4] bg-[#fff8eb] p-4 text-sm text-[#8c612e]">
+                Esta edição pertence ao formato antigo. Você pode excluí-la na lista de publicações à direita. Ela não contém um TXT editável no novo formato.
               </p>
             ) : null}
             <label htmlFor="panorama-text" className="mt-6 block text-sm font-extrabold">Texto integral do Panorama</label>
@@ -189,20 +230,35 @@ export default function PanoramaTextEditor({ initialEditions }: { initialEdition
         <aside className={panel + " p-5 sm:p-6"}>
           <p className="text-xs font-extrabold uppercase tracking-widest text-[#ae8340]">Arquivo de edições</p>
           <h2 className="mt-2 text-lg font-extrabold">Publicações salvas</h2>
-          <p className="mt-2 text-xs leading-relaxed text-[#6c8395]">Abra uma data para revisar, editar ou republicar seu texto.</p>
+          <p className="mt-2 text-xs leading-relaxed text-[#6c8395]">
+            Revise ou exclua uma edição, inclusive no formato antigo. Depois de sete dias corridos, a edição é removida automaticamente do site e do banco de dados.
+          </p>
           <div className="mt-5 max-h-[560px] space-y-2 overflow-y-auto">
-            {editions.length ? editions.map((item) => (
-              <button type="button" key={item.published_on} onClick={() => selectDate(item.published_on)}
-                aria-pressed={item.published_on === date}
-                className={"flex w-full items-center justify-between gap-3 rounded-xl border p-3 text-left text-sm transition " +
-                  (item.published_on === date ? "border-[#153d5b] bg-[#edf4fa]" : "border-[#dbe5ec] hover:bg-[#f6f9fb]")}>
-                <span className="font-extrabold">{item.published_on.split("-").reverse().join("/")}</span>
-                <span className={"rounded-full px-2 py-1 text-[0.65rem] font-bold " +
-                  (item.published_text ? "bg-[#e2f3e9] text-[#30704d]" : "bg-[#f6ebd3] text-[#946b27]")}>
-                  {item.published_text ? "Publicado" : "Rascunho"}
-                </span>
-              </button>
-            )) : <p className="rounded-xl bg-[#f1f5f8] p-4 text-xs text-[#6d8293]">Nenhuma edição no novo formato. Os dias antigos permanecem no site.</p>}
+            {allEditionDays.map((day) => {
+              const entry = editions.find((item) => item.published_on === day);
+              return (
+                <div key={day} className={"flex items-center justify-between gap-2 rounded-xl border p-2 " +
+                  (day === date ? "border-[#153d5b] bg-[#edf4fa]" : "border-[#dbe5ec] bg-white")}>
+                  <button type="button" onClick={() => selectDate(day)} aria-pressed={day === date} disabled={busy}
+                    className="min-w-0 flex-1 rounded-lg p-2 text-left transition hover:bg-[#e8f0f6]">
+                    <span className="block text-sm font-extrabold">{day.split("-").reverse().join("/")}</span>
+                    <span className={"mt-1 inline-block rounded-full px-2 py-1 text-[0.65rem] font-bold " +
+                      (!entry ? "bg-[#e6e7f5] text-[#525586]" : entry.published_text
+                        ? "bg-[#e2f3e9] text-[#30704d]" : "bg-[#f6ebd3] text-[#946b27]")}>
+                      {!entry ? "Formato antigo" : entry.published_text ? "Publicado" : "Rascunho"}
+                    </span>
+                  </button>
+                  <button type="button" disabled={busy} onClick={() => void deleteEdition(day)}
+                    aria-label={"Excluir definitivamente a edição de " + day.split("-").reverse().join("/")}
+                    className="min-h-10 shrink-0 rounded-lg border border-[#ead2cc] bg-white px-3 text-xs font-bold text-[#a14b3e] hover:bg-[#fff3f0] disabled:opacity-50">
+                    Excluir
+                  </button>
+                </div>
+              );
+            })}
+            {!allEditionDays.length ? <p className="rounded-xl bg-[#f1f5f8] p-4 text-xs text-[#6d8293]">
+              Nenhuma edição salva. As publicações vencidas são excluídas automaticamente.
+            </p> : null}
           </div>
         </aside>
       </div>
